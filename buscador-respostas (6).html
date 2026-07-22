@@ -1,0 +1,1335 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Achador — busca de respostas em PDFs</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  :root{
+    --paper: #eee7d8;
+    --paper-dark: #e2d9c4;
+    --ink: #1e2a24;
+    --ink-soft: #4a5850;
+    --line: #c9bc9f;
+    --mark: #d8a53e;
+    --mark-soft: #f2debd;
+    --teal: #22514a;
+    --teal-bright: #2f7a6d;
+    --card-shadow: 0 1px 0 var(--line), 0 8px 20px -12px rgba(30,42,36,0.35);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(circle at 1px 1px, rgba(30,42,36,0.06) 1px, transparent 0) 0 0/22px 22px,
+      var(--paper);
+    color:var(--ink);
+    font-family: 'Iowan Old Style','Georgia', serif;
+    min-height:100vh;
+  }
+  header{
+    padding:48px 24px 28px;
+    text-align:center;
+    border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg, var(--paper-dark), transparent);
+  }
+  header .tab{
+    display:inline-block;
+    font-family:'Courier New', monospace;
+    font-size:11px;
+    letter-spacing:.18em;
+    text-transform:uppercase;
+    color:var(--teal-bright);
+    background:var(--mark-soft);
+    padding:4px 10px;
+    border-radius:2px;
+    margin-bottom:14px;
+    border:1px solid var(--line);
+  }
+  h1{
+    font-size:clamp(28px,4vw,42px);
+    margin:0 0 8px;
+    font-weight:600;
+    letter-spacing:-0.01em;
+  }
+  header p{
+    color:var(--ink-soft);
+    font-family: 'Courier New', monospace;
+    font-size:13px;
+    max-width:560px;
+    margin:0 auto;
+    line-height:1.6;
+  }
+  main{
+    max-width:920px;
+    margin:0 auto;
+    padding:40px 24px 100px;
+    display:grid;
+    gap:28px;
+  }
+  .card{
+    background:var(--paper-dark);
+    border:1px solid var(--line);
+    border-radius:3px;
+    box-shadow:var(--card-shadow);
+    padding:26px 28px;
+    position:relative;
+  }
+  .card::before{
+    content:attr(data-label);
+    position:absolute;
+    top:-11px;
+    left:22px;
+    background:var(--ink);
+    color:var(--paper);
+    font-family:'Courier New', monospace;
+    font-size:10px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    padding:3px 10px;
+    border-radius:2px;
+  }
+  .drop{
+    border:1.5px dashed var(--line);
+    border-radius:3px;
+    padding:28px;
+    text-align:center;
+    cursor:pointer;
+    transition: border-color .15s, background .15s;
+    background:rgba(255,255,255,0.25);
+  }
+  .drop:hover, .drop.hover{
+    border-color:var(--teal-bright);
+    background:rgba(47,122,109,0.06);
+  }
+  .drop svg{margin-bottom:8px;opacity:.6;}
+  .drop-title{font-weight:600;font-size:15px;}
+  .drop-sub{font-family:'Courier New',monospace;font-size:11.5px;color:var(--ink-soft);margin-top:4px;}
+  input[type=file]{display:none;}
+  #docList{
+    margin-top:16px;
+    display:grid;
+    gap:8px;
+  }
+  .doc-chip{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    background:var(--paper);
+    border:1px solid var(--line);
+    border-radius:2px;
+    padding:9px 12px;
+    font-family:'Courier New',monospace;
+    font-size:12.5px;
+  }
+  .doc-chip .name{display:flex;align-items:center;gap:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .doc-chip .status{color:var(--teal-bright);font-weight:700;}
+  .doc-chip .status.err{color:#a4432e;}
+  .doc-chip button{
+    background:none;border:none;color:var(--ink-soft);cursor:pointer;font-size:14px;line-height:1;
+  }
+  .doc-chip button:hover{color:#a4432e;}
+  textarea{
+    width:100%;
+    min-height:120px;
+    resize:vertical;
+    border:1px solid var(--line);
+    border-radius:2px;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Courier New',monospace;
+    font-size:14px;
+    line-height:1.7;
+    padding:14px 16px;
+  }
+  textarea:focus{outline:2px solid var(--teal-bright);outline-offset:1px;}
+  .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px;}
+  select, .btn{
+    font-family:'Courier New',monospace;
+    font-size:12.5px;
+  }
+  select{
+    background:var(--paper);
+    border:1px solid var(--line);
+    padding:8px 10px;
+    border-radius:2px;
+    color:var(--ink);
+  }
+  .btn{
+    appearance:none;
+    border:1px solid var(--ink);
+    background:var(--teal);
+    color:var(--paper);
+    padding:10px 20px;
+    border-radius:2px;
+    cursor:pointer;
+    letter-spacing:.05em;
+    text-transform:uppercase;
+    font-weight:700;
+    transition: background .15s, transform .1s;
+  }
+  .btn:hover{background:var(--teal-bright);}
+  .btn:active{transform:translateY(1px);}
+  .btn:disabled{opacity:.45;cursor:not-allowed;}
+  .btn.ghost{
+    background:transparent;
+    color:var(--ink-soft);
+    border-color:var(--line);
+  }
+  .btn.ghost:hover{color:var(--ink);border-color:var(--ink-soft);background:rgba(0,0,0,0.03);}
+  .hint{font-family:'Courier New',monospace;font-size:11px;color:var(--ink-soft);margin-top:8px;}
+
+  .qcard{
+    background:var(--paper);
+    border:1px solid var(--line);
+    border-radius:2px;
+    padding:16px 18px;
+    margin-bottom:14px;
+    position:relative;
+  }
+  .qcard-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:10px;
+  }
+  .qcard-head .qn{
+    font-family:'Courier New',monospace;
+    font-size:11px;
+    color:var(--teal-bright);
+    background:var(--mark-soft);
+    border:1px solid var(--line);
+    border-radius:2px;
+    padding:2px 6px;
+  }
+  .qcard-head button{
+    background:none;border:none;color:var(--ink-soft);cursor:pointer;font-size:13px;
+    font-family:'Courier New',monospace;
+  }
+  .qcard-head button:hover{color:#a4432e;}
+  .raw-wrap{
+    background:var(--mark-soft);
+    border:1px dashed var(--teal-bright);
+    border-radius:2px;
+    padding:12px 14px;
+    margin-bottom:10px;
+  }
+  .raw-label{
+    font-family:'Courier New',monospace;
+    font-size:10.5px;
+    text-transform:uppercase;
+    letter-spacing:.06em;
+    color:var(--teal);
+    margin-bottom:6px;
+  }
+  .raw-box{
+    width:100%;
+    border:1px solid var(--line);
+    border-radius:2px;
+    background:#fff;
+    padding:9px 10px;
+    font-family:'Courier New',monospace;
+    font-size:12.5px;
+    line-height:1.6;
+    resize:vertical;
+  }
+  .raw-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-top:8px;
+  }
+  .btn.small{
+    padding:6px 12px;
+    font-size:11px;
+  }
+  .raw-feedback{
+    font-family:'Courier New',monospace;
+    font-size:11px;
+    color:var(--teal-bright);
+  }
+  .raw-feedback.err{color:#a4432e;}
+  .card-divider{
+    text-align:center;
+    font-family:'Courier New',monospace;
+    font-size:10px;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    color:var(--ink-soft);
+    margin:4px 0 10px;
+    position:relative;
+  }
+  .card-divider::before, .card-divider::after{
+    content:'';
+    display:inline-block;
+    width:60px;
+    height:1px;
+    background:var(--line);
+    vertical-align:middle;
+    margin:0 8px;
+  }
+  .qtext{
+    width:100%;
+    border:1px solid var(--line);
+    border-radius:2px;
+    background:#fff;
+    padding:10px 12px;
+    font-family:'Iowan Old Style','Georgia',serif;
+    font-size:15px;
+    margin-bottom:10px;
+  }
+  .alts{display:grid;gap:8px;}
+  .alt-row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .alt-letter{
+    font-family:'Courier New',monospace;
+    font-size:12px;
+    font-weight:700;
+    color:var(--teal);
+    width:18px;
+    flex-shrink:0;
+  }
+  .alt-row input{
+    flex:1;
+    border:1px solid var(--line);
+    border-radius:2px;
+    background:#fff;
+    padding:8px 10px;
+    font-family:'Iowan Old Style','Georgia',serif;
+    font-size:14px;
+  }
+  .alt-row button{
+    background:none;border:none;color:var(--ink-soft);cursor:pointer;font-size:13px;flex-shrink:0;
+  }
+  .alt-row button:hover{color:#a4432e;}
+  .addAltBtn{
+    font-family:'Courier New',monospace;
+    font-size:11.5px;
+    color:var(--teal-bright);
+    background:none;
+    border:none;
+    cursor:pointer;
+    margin-top:4px;
+    padding:0;
+    text-align:left;
+  }
+  .addAltBtn:hover{text-decoration:underline;}
+
+  .ai-toggle-row{margin-top:6px;}
+  .switch-label{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-family:'Courier New',monospace;
+    font-size:12px;
+    color:var(--ink-soft);
+    cursor:pointer;
+  }
+  .switch-label input{width:15px;height:15px;accent-color:var(--teal-bright);}
+  .mode-tag{
+    display:inline-block;
+    font-family:'Courier New',monospace;
+    font-size:10px;
+    text-transform:uppercase;
+    letter-spacing:.06em;
+    padding:2px 8px;
+    border-radius:2px;
+    margin-left:8px;
+  }
+  .mode-tag.ai{background:var(--teal);color:var(--paper);}
+  .mode-tag.fallback{background:#e7d3b0;color:#6b4b1c;border:1px solid #c9a165;}
+  .justif{
+    margin-top:6px;
+    font-size:13.5px;
+    line-height:1.6;
+    color:var(--ink-soft);
+  }
+  .verdict{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-family:'Courier New',monospace;
+    font-size:11px;
+    color:var(--ink-soft);
+    margin:2px 0 14px;
+  }
+  .alt-result{
+    border:1px solid var(--line);
+    border-radius:2px;
+    padding:12px 14px;
+    margin-bottom:8px;
+    background:var(--paper);
+  }
+  .alt-result.chosen{
+    border-color:var(--teal-bright);
+    background:linear-gradient(180deg, var(--mark-soft), var(--paper) 55%);
+    box-shadow:0 0 0 1px var(--teal-bright) inset;
+  }
+  .alt-result-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    font-size:14.5px;
+  }
+  .alt-result.chosen .alt-result-head::after{
+    content:'✓ mais sustentada';
+    font-family:'Courier New',monospace;
+    font-size:10px;
+    text-transform:uppercase;
+    letter-spacing:.06em;
+    color:var(--teal-bright);
+    font-weight:700;
+  }
+  .alt-result .bar-wrap{
+    display:flex;align-items:center;gap:6px;flex-shrink:0;
+  }
+  .alt-result .bar{
+    width:80px;height:6px;background:var(--paper-dark);border:1px solid var(--line);border-radius:3px;overflow:hidden;
+  }
+  .alt-result .bar .fill{height:100%;background:var(--mark);}
+  .alt-result .pct{font-family:'Courier New',monospace;font-size:11px;color:var(--ink-soft);width:34px;text-align:right;}
+  .evidence{
+    margin-top:8px;
+    font-size:13.5px;
+    line-height:1.65;
+    color:var(--ink-soft);
+    border-left:2px solid var(--line);
+    padding-left:10px;
+  }
+  .evidence .src{
+    font-family:'Courier New',monospace;
+    font-size:10.5px;
+    color:var(--ink-soft);
+    display:block;
+    margin-bottom:3px;
+  }
+
+  .result-clear-row{
+    text-align:right;
+    margin-top:2px;
+  }
+  #results{display:grid;gap:22px;}
+  .qblock{
+    border-top:1px solid var(--line);
+    padding-top:20px;
+  }
+  .qblock:first-child{border-top:none;padding-top:0;}
+  .qtitle{
+    font-weight:600;
+    font-size:17px;
+    margin-bottom:12px;
+    display:flex;
+    gap:10px;
+    align-items:baseline;
+  }
+  .qtitle .qn{
+    font-family:'Courier New',monospace;
+    font-size:11px;
+    color:var(--teal-bright);
+    background:var(--mark-soft);
+    border:1px solid var(--line);
+    border-radius:2px;
+    padding:2px 6px;
+  }
+  .hit{
+    background:var(--paper);
+    border:1px solid var(--line);
+    border-left:3px solid var(--teal-bright);
+    border-radius:2px;
+    padding:16px 18px;
+    margin-bottom:10px;
+  }
+  .hit-meta{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    font-family:'Courier New',monospace;
+    font-size:11px;
+    color:var(--ink-soft);
+    margin-bottom:8px;
+    gap:10px;
+  }
+  .meter{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+  }
+  .meter .bar{
+    width:60px;height:5px;background:var(--paper-dark);border:1px solid var(--line);border-radius:2px;overflow:hidden;
+  }
+  .meter .fill{height:100%;background:var(--mark);}
+  .hit-text{font-size:15px;line-height:1.75;}
+  mark{
+    background:var(--mark-soft);
+    color:var(--ink);
+    padding:0 2px;
+    border-radius:1px;
+    box-shadow: inset 0 -1px 0 var(--mark);
+  }
+  mark.weak{background:transparent;box-shadow: inset 0 -2px 0 var(--line);}
+  .empty{
+    font-family:'Courier New',monospace;
+    font-size:12.5px;
+    color:var(--ink-soft);
+    padding:8px 0;
+  }
+  .progress{
+    font-family:'Courier New',monospace;
+    font-size:12px;
+    color:var(--teal-bright);
+  }
+  @media (max-width:600px){
+    main{padding:28px 16px 80px;}
+    .card{padding:20px 18px;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="tab">ferramenta de estudo</div>
+  <h1>Achador de respostas</h1>
+  <p>Suba os PDFs do curso, digite a questão com suas alternativas e o sistema indica, por aproximação de palavras, qual alternativa é mais sustentada pelo texto.</p>
+</header>
+
+<main>
+  <section class="card" data-label="01 — Documentos">
+    <div class="drop" id="drop">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#22514a" stroke-width="1.6"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+      <div class="drop-title">Clique ou arraste os PDFs aqui</div>
+      <div class="drop-sub">um ou vários arquivos .pdf</div>
+      <input type="file" id="fileInput" accept="application/pdf" multiple>
+    </div>
+    <div id="docList"></div>
+  </section>
+
+  <section class="card" data-label="02 — Questões">
+    <div id="qform"></div>
+    <div class="row">
+      <button class="btn ghost" id="addQBtn">+ adicionar questão</button>
+    </div>
+    <div class="row ai-toggle-row">
+      <label class="switch-label">
+        <input type="checkbox" id="useAI" checked>
+        Usar IA (Claude) para decidir — analisa o significado, não só palavras parecidas
+      </label>
+    </div>
+    <div class="row" style="margin-top:20px;border-top:1px solid var(--line);padding-top:16px;">
+      <button class="btn" id="searchBtn">Analisar alternativas</button>
+      <button class="btn ghost" id="clearBtn">Limpar tudo</button>
+      <span class="progress" id="progress"></span>
+    </div>
+    <div class="hint">Com IA ligada, o Claude lê o(s) trecho(s) mais relevantes do PDF e decide qual alternativa está correta pelo significado (funciona só enquanto este artefato está aberto aqui no chat/Claude.ai). Se a IA falhar ou estiver desligada, o sistema usa o modo de aproximação por palavras (menos confiável, mas funciona offline).</div>
+  </section>
+
+  <section class="card" data-label="03 — Resultados" id="resultsCard" style="display:none;">
+    <div id="results"></div>
+    <div class="row" id="summaryRow" style="display:none;margin-top:6px;border-top:1px solid var(--line);padding-top:16px;">
+      <button class="btn" id="summaryBtn">📄 Gerar resumo de estudo</button>
+      <span class="hint" style="margin-top:0;">Baixa um documento com enunciados, resposta correta, justificativa e indicação de onde aprofundar (documento/página).</span>
+    </div>
+  </section>
+</main>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+// ---------- estado ----------
+// docs: [{ name, paragraphs: [{ text, page, docName }] }]
+let documents = [];
+
+const dropEl = document.getElementById('drop');
+const fileInput = document.getElementById('fileInput');
+const docListEl = document.getElementById('docList');
+const progressEl = document.getElementById('progress');
+const resultsCard = document.getElementById('resultsCard');
+const resultsEl = document.getElementById('results');
+const summaryRow = document.getElementById('summaryRow');
+const summaryBtn = document.getElementById('summaryBtn');
+let lastResults = []; // guarda os dados de cada questão analisada, para gerar o resumo de estudo
+
+dropEl.addEventListener('click', () => fileInput.click());
+['dragenter','dragover'].forEach(ev => dropEl.addEventListener(ev, e => {
+  e.preventDefault(); dropEl.classList.add('hover');
+}));
+['dragleave','drop'].forEach(ev => dropEl.addEventListener(ev, e => {
+  e.preventDefault(); dropEl.classList.remove('hover');
+}));
+dropEl.addEventListener('drop', e => handleFiles(e.dataTransfer.files));
+fileInput.addEventListener('change', e => handleFiles(e.target.files));
+
+function handleFiles(fileList){
+  [...fileList].forEach(file => {
+    if(file.type !== 'application/pdf'){ return; }
+    const docEntry = { name: file.name, paragraphs: [], status: 'lendo' };
+    documents.push(docEntry);
+    renderDocList();
+    extractPdf(file, docEntry);
+  });
+}
+
+function renderDocList(){
+  docListEl.innerHTML = '';
+  documents.forEach((d, i) => {
+    const chip = document.createElement('div');
+    chip.className = 'doc-chip';
+    const statusClass = d.status === 'erro' ? 'status err' : 'status';
+    chip.innerHTML = `
+      <span class="name">📄 ${escapeHtml(d.name)}</span>
+      <span class="${statusClass}">${d.status}</span>
+      <button title="remover" data-i="${i}">✕</button>`;
+    chip.querySelector('button').addEventListener('click', () => {
+      documents.splice(i,1);
+      renderDocList();
+    });
+    docListEl.appendChild(chip);
+  });
+}
+
+async function extractPdf(file, docEntry){
+  try{
+    const buf = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    const paragraphs = [];
+    for(let p = 1; p <= pdf.numPages; p++){
+      const page = await pdf.getPage(p);
+      const content = await page.getTextContent();
+      // agrupa itens de texto em uma string bruta da página, preservando quebras aproximadas
+      let raw = '';
+      let lastY = null;
+      content.items.forEach(item => {
+        const y = item.transform[5];
+        if(lastY !== null && Math.abs(y - lastY) > 4){
+          raw += '\n';
+        }
+        raw += item.str + ' ';
+        lastY = y;
+      });
+      // quebra a página em parágrafos: por linhas em branco, senão por blocos de ~50 palavras
+      const chunks = raw.split(/\n{1,}/).map(s => s.trim()).filter(Boolean);
+      let buffer = '';
+      chunks.forEach(chunk => {
+        buffer += (buffer ? ' ' : '') + chunk;
+        const wc = buffer.split(/\s+/).length;
+        if(wc >= 45){
+          paragraphs.push({ text: buffer.trim(), page: p, docName: docEntry.name });
+          buffer = '';
+        }
+      });
+      if(buffer.trim().split(/\s+/).length >= 8){
+        paragraphs.push({ text: buffer.trim(), page: p, docName: docEntry.name });
+      }
+    }
+    docEntry.paragraphs = paragraphs;
+    docEntry.status = `${paragraphs.length} trechos · ${pdf.numPages} pág.`;
+  }catch(err){
+    console.error(err);
+    docEntry.status = 'erro';
+  }
+  renderDocList();
+}
+
+// ---------- normalização e similaridade ----------
+const STOPWORDS = new Set(['a','o','as','os','um','uma','uns','umas','de','do','da','dos','das','em','no','na','nos','nas',
+  'por','para','com','sem','sob','sobre','entre','e','ou','mas','que','se','ao','aos','à','às','é','são','foi','foram',
+  'ser','estar','tem','têm','há','como','quando','onde','qual','quais','quem','porque','porquê','por que','este','esta',
+  'esse','essa','isso','isto','aquele','aquela','seu','sua','seus','suas','me','te','lhe','nos','vos','lhes','mais',
+  'muito','também','já','ainda','só','apenas','pelo','pela','pelos','pelas','num','numa','nesse','nessa','neste','nesta']);
+
+function normalize(str){
+  return str.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+}
+function tokenize(str){
+  return normalize(str).match(/[a-z0-9]+/g) || [];
+}
+function contentWords(str){
+  return tokenize(str).filter(w => w.length > 2 && !STOPWORDS.has(w));
+}
+
+// distância de Levenshtein (para aproximação entre palavras: plural, erros de digitação, variações)
+function levenshtein(a, b){
+  if(a === b) return 0;
+  const al = a.length, bl = b.length;
+  if(al === 0) return bl;
+  if(bl === 0) return al;
+  let prev = new Array(bl+1);
+  for(let j=0;j<=bl;j++) prev[j]=j;
+  for(let i=1;i<=al;i++){
+    const cur = [i];
+    for(let j=1;j<=bl;j++){
+      const cost = a[i-1] === b[j-1] ? 0 : 1;
+      cur[j] = Math.min(prev[j]+1, cur[j-1]+1, prev[j-1]+cost);
+    }
+    prev = cur;
+  }
+  return prev[bl];
+}
+// similaridade 0..1 entre duas palavras (aproximação: raiz em comum + distância de edição)
+function wordSimilarity(a, b){
+  if(a === b) return 1;
+  if(a.length >= 4 && b.length >= 4){
+    if(a.startsWith(b) || b.startsWith(a)) return 0.85; // trata plural/variação de sufixo
+  }
+  const dist = levenshtein(a,b);
+  const maxLen = Math.max(a.length,b.length);
+  const sim = 1 - dist / maxLen;
+  return sim >= 0.72 ? sim * 0.8 : 0;
+}
+
+function scoreParagraph(questionWords, paragraph){
+  const paraWords = contentWords(paragraph.text);
+  if(paraWords.length === 0 || questionWords.length === 0) return 0;
+  const paraSet = new Set(paraWords);
+  let total = 0;
+  const matchedTerms = [];
+  questionWords.forEach(qw => {
+    let best = 0;
+    if(paraSet.has(qw)) best = 1;
+    else{
+      for(const pw of paraSet){
+        const s = wordSimilarity(qw, pw);
+        if(s > best) best = s;
+      }
+    }
+    if(best > 0.3) matchedTerms.push(qw);
+    total += best;
+  });
+  const coverage = matchedTerms.length / questionWords.length; // fração da pergunta coberta
+  const density = total / paraWords.length; // concentração dos termos no trecho
+  const finalScore = (total * 2) * (0.5 + coverage) ; // prioriza cobertura ampla da pergunta
+  return { score: finalScore, coverage, matchedTerms };
+}
+
+function highlight(text, questionWords){
+  const parts = text.split(/(\s+)/);
+  return parts.map(part => {
+    if(/^\s+$/.test(part) || part === '') return part;
+    const clean = normalize(part).replace(/[^a-z0-9]/g,'');
+    if(!clean) return escapeHtml(part);
+    let best = 0;
+    questionWords.forEach(qw => {
+      const s = clean === qw ? 1 : wordSimilarity(qw, clean);
+      if(s > best) best = s;
+    });
+    if(best >= 0.95) return `<mark>${escapeHtml(part)}</mark>`;
+    if(best >= 0.5) return `<mark class="weak">${escapeHtml(part)}</mark>`;
+    return escapeHtml(part);
+  }).join('');
+}
+
+function escapeHtml(s){
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ---------- formulário de questões + alternativas ----------
+const LETTERS = ['A','B','C','D','E','F'];
+let qCounter = 0;
+// cada questão: { id, alts: [id,...] }
+let questionModel = [];
+
+function newQuestion(){
+  const id = 'q' + (++qCounter);
+  questionModel.push({ id, altIds: ['a1','a2','a3','a4'].map(s => id + '_' + s) });
+  renderQForm();
+}
+function removeQuestion(id){
+  if(questionModel.length <= 1){
+    clearQuestion(id);
+    return;
+  }
+  questionModel = questionModel.filter(q => q.id !== id);
+  renderQForm();
+}
+// apaga o conteúdo de uma questão (enunciado + alternativas), mantendo o card no lugar
+// para o usuário digitar/colar a próxima questão sem precisar remover e recriar o card
+function clearQuestion(id){
+  const q = questionModel.find(q => q.id === id);
+  if(!q) return;
+  q.altIds = ['a1','a2','a3','a4'].map(s => id + '_' + s + '_' + Date.now());
+  pendingOverride.questions[id] = '';
+  q.altIds.forEach(aid => { pendingOverride.alts[aid] = ''; });
+  renderQForm();
+  const card = document.querySelector(`.qcard[data-qid="${id}"]`);
+  if(card){
+    const raw = card.querySelector('[data-role="raw"]');
+    if(raw) raw.value = '';
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const rawBox = card.querySelector('.raw-box');
+    if(rawBox) rawBox.focus();
+  }
+}
+function addAlt(qId){
+  const q = questionModel.find(q => q.id === qId);
+  if(q.altIds.length >= 6) return;
+  const nextLetterIdx = q.altIds.length;
+  q.altIds.push(qId + '_a' + (nextLetterIdx+1) + '_' + Date.now());
+  renderQForm();
+}
+function removeAlt(qId, altId){
+  const q = questionModel.find(q => q.id === qId);
+  if(q.altIds.length <= 2) return;
+  q.altIds = q.altIds.filter(a => a !== altId);
+  renderQForm();
+}
+
+let pendingOverride = { questions:{}, alts:{} };
+
+// reconhece marcadores de alternativa no início de linha: "A)", "a.", "A -", "A:" etc.
+function parseRawQuestion(raw){
+  const text = (raw || '').replace(/\r\n/g, '\n').trim();
+  if(!text) return null;
+  const regex = /(?:^|\n)[ \t]*\(?([A-Fa-f])\)?[\)\.\-:][ \t]+/g;
+  const markers = [];
+  let m;
+  while((m = regex.exec(text)) !== null){
+    markers.push({ letter: m[1].toUpperCase(), markerStart: m.index, contentStart: m.index + m[0].length });
+  }
+  if(markers.length < 2) return null;
+  const questionText = text.slice(0, markers[0].markerStart).trim();
+  const alts = markers.map((mk, i) => {
+    const end = (i+1 < markers.length) ? markers[i+1].markerStart : text.length;
+    const altText = text.slice(mk.contentStart, end).trim().replace(/\s+/g, ' ');
+    return { letter: mk.letter, text: altText };
+  }).filter(a => a.text);
+  if(alts.length < 2) return null;
+  return { questionText: questionText.replace(/\s+/g, ' '), alts: alts.slice(0,6) };
+}
+
+function applyParsedQuestion(qId, parsed){
+  const q = questionModel.find(q => q.id === qId);
+  if(!q) return;
+  const n = Math.max(2, Math.min(parsed.alts.length, 6));
+  q.altIds = parsed.alts.slice(0, n).map((a, i) => qId + '_p' + i + '_' + Date.now() + i);
+  pendingOverride.questions[qId] = parsed.questionText;
+  parsed.alts.slice(0, n).forEach((a, i) => {
+    pendingOverride.alts[q.altIds[i]] = a.text;
+  });
+  renderQForm();
+}
+
+function renderQForm(){
+  const container = document.getElementById('qform');
+  // preserva valores já digitados antes de re-renderizar
+  const saved = collectFormValues();
+  Object.assign(saved.questions, pendingOverride.questions);
+  Object.assign(saved.alts, pendingOverride.alts);
+  pendingOverride = { questions:{}, alts:{} };
+  container.innerHTML = '';
+  questionModel.forEach((q, qi) => {
+    const card = document.createElement('div');
+    card.className = 'qcard';
+    card.dataset.qid = q.id;
+    const head = document.createElement('div');
+    head.className = 'qcard-head';
+    head.innerHTML = `<span class="qn">Questão ${qi+1}</span>`;
+    const rm = document.createElement('button');
+    rm.textContent = questionModel.length > 1 ? '✕ remover' : '🗑 apagar para inserir outra';
+    rm.title = questionModel.length > 1 ? 'Remove esta questão' : 'Limpa os campos para digitar/colar a próxima questão';
+    rm.addEventListener('click', () => removeQuestion(q.id));
+    head.appendChild(rm);
+    card.appendChild(head);
+
+    // caixa de colar texto bruto + estruturar automaticamente
+    const rawWrap = document.createElement('div');
+    rawWrap.className = 'raw-wrap';
+    const rawLabel = document.createElement('div');
+    rawLabel.className = 'raw-label';
+    rawLabel.textContent = 'colar questão pronta (com A) B) C)…) e estruturar automaticamente';
+    rawWrap.appendChild(rawLabel);
+    const rawInput = document.createElement('textarea');
+    rawInput.className = 'raw-box';
+    rawInput.rows = 3;
+    rawInput.placeholder = 'Cole aqui o texto completo da questão, ex:\nSão características da internet:\nA) ...\nB) ...\nC) ...\nD) ...';
+    rawInput.dataset.role = 'raw';
+    rawWrap.appendChild(rawInput);
+    const rawRow = document.createElement('div');
+    rawRow.className = 'raw-row';
+    const parseBtn = document.createElement('button');
+    parseBtn.className = 'btn ghost small';
+    parseBtn.textContent = 'Estruturar automaticamente';
+    const feedback = document.createElement('span');
+    feedback.className = 'raw-feedback';
+    parseBtn.addEventListener('click', () => {
+      const parsed = parseRawQuestion(rawInput.value);
+      if(!parsed){
+        feedback.textContent = 'Não reconheci alternativas (use "A) texto", uma por linha).';
+        feedback.classList.add('err');
+        return;
+      }
+      applyParsedQuestion(q.id, parsed);
+    });
+    rawRow.appendChild(parseBtn);
+    rawRow.appendChild(feedback);
+    rawWrap.appendChild(rawRow);
+    card.appendChild(rawWrap);
+
+    const divider = document.createElement('div');
+    divider.className = 'card-divider';
+    divider.textContent = 'ou preencha manualmente';
+    card.appendChild(divider);
+
+    const qInput = document.createElement('textarea');
+    qInput.className = 'qtext';
+    qInput.rows = 2;
+    qInput.placeholder = 'Digite o enunciado da questão…';
+    qInput.dataset.role = 'question';
+    qInput.value = saved.questions[q.id] || '';
+    card.appendChild(qInput);
+
+    const altsWrap = document.createElement('div');
+    altsWrap.className = 'alts';
+    q.altIds.forEach((altId, ai) => {
+      const row = document.createElement('div');
+      row.className = 'alt-row';
+      row.innerHTML = `<span class="alt-letter">${LETTERS[ai]})</span>`;
+      const altInput = document.createElement('input');
+      altInput.type = 'text';
+      altInput.placeholder = `Alternativa ${LETTERS[ai]}`;
+      altInput.dataset.role = 'alt';
+      altInput.dataset.altid = altId;
+      altInput.value = saved.alts[altId] || '';
+      row.appendChild(altInput);
+      if(q.altIds.length > 2){
+        const rm = document.createElement('button');
+        rm.textContent = '✕';
+        rm.title = 'remover alternativa';
+        rm.addEventListener('click', () => removeAlt(q.id, altId));
+        row.appendChild(rm);
+      }
+      altsWrap.appendChild(row);
+    });
+    card.appendChild(altsWrap);
+
+    if(q.altIds.length < 6){
+      const addAltBtn = document.createElement('button');
+      addAltBtn.className = 'addAltBtn';
+      addAltBtn.textContent = '+ adicionar alternativa';
+      addAltBtn.addEventListener('click', () => addAlt(q.id));
+      card.appendChild(addAltBtn);
+    }
+
+    container.appendChild(card);
+  });
+}
+
+function collectFormValues(){
+  const questions = {};
+  const alts = {};
+  document.querySelectorAll('.qcard').forEach(card => {
+    const qid = card.dataset.qid;
+    const qEl = card.querySelector('[data-role="question"]');
+    if(qEl) questions[qid] = qEl.value;
+    card.querySelectorAll('[data-role="alt"]').forEach(a => {
+      alts[a.dataset.altid] = a.value;
+    });
+  });
+  return { questions, alts };
+}
+
+document.getElementById('addQBtn').addEventListener('click', newQuestion);
+newQuestion(); // começa com uma questão em branco
+
+// ---------- análise de alternativas ----------
+const NEGATION_MARKERS = ['incorret', 'falsa', 'falso', 'exceto', 'nao e correto', 'não é correto', 'errad', 'nao verdadeir', 'inadequad'];
+
+function isNegativeQuestion(qText){
+  const norm = normalize(qText);
+  return NEGATION_MARKERS.some(m => norm.includes(normalize(m)));
+}
+
+// suporte de uma alternativa: combina termos da pergunta + termos da alternativa,
+// procura nos parágrafos os que mais contêm esses termos juntos (usado no modo offline e para selecionar contexto p/ IA)
+function scoreAlternative(questionWords, altWords, paragraphs){
+  const combined = [...new Set([...questionWords, ...altWords])];
+  let best = null;
+  paragraphs.forEach(p => {
+    const r = scoreParagraph(combined, p);
+    const altOnly = scoreParagraph(altWords, p);
+    const weighted = r.score * 0.55 + altOnly.score * 1.3;
+    if(!best || weighted > best.weighted){
+      best = { weighted, coverage: r.coverage, paragraph: p, altCoverage: altOnly.coverage };
+    }
+  });
+  return best;
+}
+
+// seleciona os parágrafos mais relevantes de todos os documentos para dar de contexto à IA
+function selectContext(qWords, allAltWords, paragraphs, maxParas, maxChars){
+  const union = [...new Set([...qWords, ...allAltWords])];
+  return paragraphs
+    .map(p => ({ p, s: scoreParagraph(union, p).score }))
+    .filter(r => r.s > 0)
+    .sort((a,b) => b.s - a.s)
+    .slice(0, maxParas)
+    .map(r => ({
+      docName: r.p.docName,
+      page: r.p.page,
+      text: r.p.text.length > maxChars ? r.p.text.slice(0, maxChars) + '…' : r.p.text
+    }));
+}
+
+async function analyzeWithAI(question, contextParas){
+  const contextText = contextParas.length
+    ? contextParas.map((p,i) => `[Trecho ${i+1} — ${p.docName}, pág. ${p.page}]\n${p.text}`).join('\n\n')
+    : '(nenhum trecho claramente relevante foi localizado automaticamente no material)';
+  const altsText = question.alts.map(a => `${a.letter}) ${a.text}`).join('\n');
+  const letterKeys = question.alts.map(a => a.letter);
+  const probTemplate = letterKeys.map(l => `"${l}":0`).join(',');
+
+  const userPrompt = `Com base exclusivamente no material de estudo abaixo, responda à questão de múltipla escolha. Não use conhecimento externo — decida só com o que está no material.
+
+MATERIAL:
+${contextText}
+
+QUESTÃO:
+${question.text}
+
+ALTERNATIVAS:
+${altsText}
+
+Responda SOMENTE com um objeto JSON válido, sem markdown e sem nenhum texto fora do JSON, exatamente neste formato:
+{"probabilidades":{${probTemplate}},"letra_correta":"${letterKeys[0]}","justificativa":"1 a 2 frases em português explicando, com base no material, por que essa alternativa é a correta","encontrado_no_texto":true}
+As probabilidades são um palpite de 0 a 100 de cada alternativa estar correta (não precisam somar 100).`;
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-6",
+      max_tokens: 500,
+      system: "Você decide questões de múltipla escolha usando apenas o material fornecido pelo usuário, sem conhecimento externo. Nunca invente informação que não esteja no material. Se a questão pedir a alternativa INCORRETA, FALSA ou EXCETO, leve isso em conta ao decidir. Responda apenas com o objeto JSON pedido, nada além disso, sem crases nem markdown.",
+      messages: [{ role: "user", content: userPrompt }]
+    })
+  });
+  if(!response.ok){
+    throw new Error('Falha na API (status ' + response.status + ')');
+  }
+  const data = await response.json();
+  const textBlock = (data.content || []).find(b => b.type === 'text');
+  if(!textBlock || !textBlock.text) throw new Error('Resposta da IA sem conteúdo de texto.');
+  let clean = textBlock.text.trim();
+  clean = clean.replace(/^```json/i, '').replace(/^```/, '').replace(/```$/, '').trim();
+  const parsed = JSON.parse(clean);
+  if(!parsed.letra_correta) throw new Error('JSON da IA sem letra_correta.');
+  return parsed;
+}
+
+document.getElementById('searchBtn').addEventListener('click', runAnalysis);
+document.getElementById('clearBtn').addEventListener('click', () => {
+  questionModel = [];
+  qCounter = 0;
+  newQuestion();
+  resultsCard.style.display = 'none';
+  resultsEl.innerHTML = '';
+  lastResults = [];
+  summaryRow.style.display = 'none';
+});
+
+function buildAltResultsHtml(question, opts){
+  // opts: { mode: 'ai'|'fallback', chosenLetter, pctByLetter, justification, evidenceHtml, foundInText }
+  const maxPct = Math.max(...Object.values(opts.pctByLetter), 1);
+  return question.alts.map(alt => {
+    const rawPct = opts.pctByLetter[alt.letter] || 0;
+    const pct = opts.mode === 'ai' ? Math.round(rawPct) : Math.round((rawPct / maxPct) * 100);
+    const isChosen = alt.letter === opts.chosenLetter;
+    const div = document.createElement('div');
+    div.className = 'alt-result' + (isChosen ? ' chosen' : '');
+    let extra = '';
+    if(isChosen){
+      if(opts.mode === 'ai' && opts.justification){
+        extra += `<div class="justif">${escapeHtml(opts.justification)}</div>`;
+      }
+      if(opts.evidenceHtml){
+        extra += opts.evidenceHtml;
+      }
+    }
+    div.innerHTML = `
+      <div class="alt-result-head">
+        <span><strong>${alt.letter})</strong> ${escapeHtml(alt.text)}</span>
+        <span class="bar-wrap"><span class="bar"><span class="fill" style="width:${pct}%"></span></span><span class="pct">${pct}%</span></span>
+      </div>
+      ${extra}
+    `;
+    return div;
+  });
+}
+
+function runFallbackForQuestion(question, allParagraphs){
+  const qWords = contentWords(question.text);
+  const negative = isNegativeQuestion(question.text);
+  const altResults = question.alts.map(alt => {
+    const altWords = contentWords(alt.text);
+    const best = scoreAlternative(qWords, altWords, allParagraphs);
+    return { ...alt, best, altWords };
+  });
+  const sortedBySupport = [...altResults].sort((a,b) => (b.best?b.best.weighted:0) - (a.best?a.best.weighted:0));
+  const chosen = negative ? sortedBySupport[sortedBySupport.length-1] : sortedBySupport[0];
+  const pctByLetter = {};
+  altResults.forEach(a => pctByLetter[a.letter] = a.best ? a.best.weighted : 0);
+
+  let evidenceHtml = '';
+  let evidenceSource = null, evidenceText = '';
+  const chosenResult = altResults.find(a => a.letter === chosen.letter);
+  if(chosenResult && chosenResult.best && chosenResult.best.paragraph){
+    evidenceSource = { docName: chosenResult.best.paragraph.docName, page: chosenResult.best.paragraph.page };
+    evidenceText = chosenResult.best.paragraph.text;
+    evidenceHtml = `<div class="evidence">
+      <span class="src">${escapeHtml(chosenResult.best.paragraph.docName)} · pág. ${chosenResult.best.paragraph.page}</span>
+      ${highlight(chosenResult.best.paragraph.text, [...qWords, ...chosenResult.altWords])}
+    </div>`;
+  }
+
+  return {
+    mode: 'fallback',
+    chosenLetter: chosen.letter,
+    pctByLetter,
+    justification: negative ? 'Marcador negativo ("incorreta/falsa/exceto") detectado — apontada a alternativa menos sustentada pelo texto.' : 'Alternativa com maior sobreposição de palavras com o material (modo aproximado).',
+    evidenceHtml,
+    evidenceSource,
+    evidenceText
+  };
+}
+
+async function runAnalysis(){
+  const allParagraphs = documents.flatMap(d => d.paragraphs);
+  if(allParagraphs.length === 0){
+    progressEl.textContent = 'Envie ao menos um PDF antes de analisar.';
+    setTimeout(()=> progressEl.textContent = '', 3000);
+    return;
+  }
+
+  const values = collectFormValues();
+  const questions = questionModel.map(q => ({
+    id: q.id,
+    text: (values.questions[q.id] || '').trim(),
+    alts: q.altIds.map((aid, i) => ({ id: aid, letter: LETTERS[i], text: (values.alts[aid] || '').trim() }))
+      .filter(a => a.text)
+  })).filter(q => q.text && q.alts.length >= 2);
+
+  if(questions.length === 0){
+    progressEl.textContent = 'Preencha o enunciado e ao menos 2 alternativas.';
+    setTimeout(()=> progressEl.textContent = '', 3000);
+    return;
+  }
+
+  const useAI = document.getElementById('useAI').checked;
+  const searchBtn = document.getElementById('searchBtn');
+  searchBtn.disabled = true;
+  resultsEl.innerHTML = '';
+  resultsCard.style.display = 'block';
+  lastResults = [];
+  summaryRow.style.display = 'none';
+
+  for(let idx = 0; idx < questions.length; idx++){
+    const q = questions[idx];
+    progressEl.textContent = useAI
+      ? `analisando questão ${idx+1} de ${questions.length} com IA…`
+      : `analisando questão ${idx+1} de ${questions.length}…`;
+
+    const qWords = contentWords(q.text);
+    const negative = isNegativeQuestion(q.text);
+    let result;
+
+    if(useAI){
+      try{
+        const allAltWords = q.alts.flatMap(a => contentWords(a.text));
+        const contextParas = selectContext(qWords, allAltWords, allParagraphs, 6, 650);
+        const ai = await analyzeWithAI(q, contextParas);
+        const pctByLetter = {};
+        q.alts.forEach(a => pctByLetter[a.letter] = (ai.probabilidades && typeof ai.probabilidades[a.letter] === 'number') ? ai.probabilidades[a.letter] : 0);
+        let evidenceHtml = '';
+        let evidenceSource = null, evidenceText = '';
+        if(contextParas.length){
+          const top = contextParas[0];
+          const chosenAlt = q.alts.find(a => a.letter === ai.letra_correta);
+          const altWords = chosenAlt ? contentWords(chosenAlt.text) : [];
+          evidenceSource = { docName: top.docName, page: top.page };
+          evidenceText = top.text;
+          evidenceHtml = `<div class="evidence">
+            <span class="src">${escapeHtml(top.docName)} · pág. ${top.page}</span>
+            ${highlight(top.text, [...qWords, ...altWords])}
+          </div>`;
+        }
+        result = {
+          mode: 'ai',
+          chosenLetter: ai.letra_correta,
+          pctByLetter,
+          justification: ai.justificativa || '',
+          evidenceHtml,
+          evidenceSource,
+          evidenceText,
+          foundInText: ai.encontrado_no_texto !== false
+        };
+      }catch(err){
+        console.error('IA falhou, usando modo aproximado:', err);
+        result = runFallbackForQuestion(q, allParagraphs);
+        result.apiError = true;
+      }
+    } else {
+      result = runFallbackForQuestion(q, allParagraphs);
+    }
+
+    lastResults.push({
+      index: idx + 1,
+      question: q.text,
+      alts: q.alts,
+      chosenLetter: result.chosenLetter,
+      justification: result.justification || '',
+      mode: result.mode,
+      apiError: result.apiError || false,
+      foundInText: result.foundInText,
+      negative,
+      evidenceSource: result.evidenceSource || null,
+      evidenceText: result.evidenceText || ''
+    });
+
+    const block = document.createElement('div');
+    block.className = 'qblock';
+
+    const title = document.createElement('div');
+    title.className = 'qtitle';
+    const tag = result.mode === 'ai'
+      ? '<span class="mode-tag ai">IA</span>'
+      : '<span class="mode-tag fallback">aproximado</span>';
+    title.innerHTML = `<span class="qn">Q${idx+1}</span> ${escapeHtml(q.text)} ${tag}`;
+    block.appendChild(title);
+
+    const verdict = document.createElement('div');
+    verdict.className = 'verdict';
+    if(result.apiError){
+      verdict.textContent = '⚠ não foi possível consultar a IA agora (verifique se este arquivo está aberto aqui no Claude) — usando modo de aproximação por palavras como alternativa.';
+    } else if(result.mode === 'ai'){
+      verdict.textContent = result.foundInText === false
+        ? '⚠ a IA não encontrou base suficiente no material — resposta é um palpite, confira manualmente.'
+        : (negative ? '⚠ enunciado pede a alternativa incorreta/falsa — a IA considerou isso ao decidir.' : 'resposta decidida pelo Claude com base no material enviado.');
+    } else {
+      verdict.textContent = negative
+        ? '⚠ marcador negativo detectado — apontando a alternativa MENOS sustentada pelo texto (modo aproximado)'
+        : 'apontando a alternativa mais sustentada por palavras do texto (modo aproximado)';
+    }
+    block.appendChild(verdict);
+
+    buildAltResultsHtml(q, result).forEach(div => block.appendChild(div));
+
+    const clearRow = document.createElement('div');
+    clearRow.className = 'result-clear-row';
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'btn ghost small';
+    clearBtn.textContent = '🗑 apagar esta questão e inserir outra';
+    clearBtn.addEventListener('click', () => clearQuestion(q.id));
+    clearRow.appendChild(clearBtn);
+    block.appendChild(clearRow);
+
+    resultsEl.appendChild(block);
+    resultsCard.scrollIntoView({behavior:'smooth', block:'nearest'});
+  }
+
+  progressEl.textContent = '';
+  searchBtn.disabled = false;
+  if(lastResults.length){
+    summaryRow.style.display = 'flex';
+  }
+}
+
+// ---------- resumo de estudo (documento para baixar) ----------
+function buildStudySummaryHtml(){
+  const now = new Date();
+  const dataStr = now.toLocaleDateString('pt-BR') + ' ' + now.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+  const docNames = documents.map(d => d.name);
+
+  const itemsHtml = lastResults.map(r => {
+    const chosenAlt = r.alts.find(a => a.letter === r.chosenLetter);
+    const altsHtml = r.alts.map(a => {
+      const isCorrect = a.letter === r.chosenLetter;
+      return `<div class="alt${isCorrect ? ' correct' : ''}">
+        <strong>${escapeHtml(a.letter)})</strong> ${escapeHtml(a.text)}${isCorrect ? ' <span class="tag">✓ correta</span>' : ''}
+      </div>`;
+    }).join('');
+
+    let modeNote = '';
+    if(r.apiError){
+      modeNote = 'Obs.: a IA falhou nesta questão, resultado gerado pelo modo de aproximação por palavras — confira manualmente.';
+    } else if(r.mode === 'ai' && r.foundInText === false){
+      modeNote = 'Obs.: a IA não encontrou base suficiente no material para esta questão — trate a resposta como palpite e confira manualmente.';
+    } else if(r.mode === 'fallback'){
+      modeNote = 'Obs.: resposta gerada pelo modo de aproximação por palavras (sem IA) — confira manualmente.';
+    }
+    if(r.negative){
+      modeNote += (modeNote ? ' ' : '') + 'Enunciado pede a alternativa incorreta/falsa/exceto.';
+    }
+
+    const aprofundamento = r.evidenceSource
+      ? `<div class="deepen">
+          <div class="deepen-label">Para aprofundar</div>
+          <div class="deepen-src">${escapeHtml(r.evidenceSource.docName)} — página ${escapeHtml(String(r.evidenceSource.page))}</div>
+          <div class="deepen-text">${escapeHtml(r.evidenceText)}</div>
+        </div>`
+      : `<div class="deepen"><div class="deepen-label">Para aprofundar</div><div class="deepen-text">Nenhum trecho específico localizado — revise o material completo sobre este tema.</div></div>`;
+
+    return `<div class="item">
+      <div class="item-head">Questão ${r.index}</div>
+      <div class="question">${escapeHtml(r.question)}</div>
+      <div class="alts">${altsHtml}</div>
+      ${chosenAlt ? `<div class="answer">Resposta correta: <strong>${escapeHtml(r.chosenLetter)}) ${escapeHtml(chosenAlt.text)}</strong></div>` : ''}
+      ${r.justification ? `<div class="justification">${escapeHtml(r.justification)}</div>` : ''}
+      ${modeNote ? `<div class="mode-note">${escapeHtml(modeNote)}</div>` : ''}
+      ${aprofundamento}
+    </div>`;
+  }).join('\n');
+
+  return `<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Resumo de estudo</title>
+<style>
+  body{font-family:Georgia,'Iowan Old Style',serif;max-width:760px;margin:40px auto;padding:0 24px;color:#1e2a24;line-height:1.6;}
+  h1{font-size:24px;margin-bottom:4px;}
+  .meta{font-family:'Courier New',monospace;font-size:12px;color:#555;margin-bottom:28px;}
+  .item{border-top:1px solid #ccc;padding:20px 0;}
+  .item:first-of-type{border-top:none;}
+  .item-head{font-family:'Courier New',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#2f7a6d;margin-bottom:6px;}
+  .question{font-weight:700;font-size:16px;margin-bottom:10px;}
+  .alts{margin-bottom:10px;}
+  .alt{padding:4px 0;font-size:14px;}
+  .alt.correct{background:#f2debd66;border-left:3px solid #2f7a6d;padding-left:8px;font-weight:600;}
+  .tag{font-family:'Courier New',monospace;font-size:11px;color:#2f7a6d;}
+  .answer{font-size:14.5px;margin:8px 0;}
+  .justification{font-size:14px;color:#333;margin-bottom:8px;}
+  .mode-note{font-family:'Courier New',monospace;font-size:11.5px;color:#a4432e;margin-bottom:8px;}
+  .deepen{background:#f7f3e8;border-left:3px solid #d8a53e;padding:10px 14px;margin-top:8px;}
+  .deepen-label{font-family:'Courier New',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:#8a6a1e;margin-bottom:4px;}
+  .deepen-src{font-family:'Courier New',monospace;font-size:11.5px;color:#555;margin-bottom:4px;}
+  .deepen-text{font-size:13.5px;color:#444;}
+  @media print{ body{margin:0;padding:24px;} }
+</style></head>
+<body>
+  <h1>Resumo de estudo</h1>
+  <div class="meta">Gerado em ${dataStr} · material: ${docNames.length ? escapeHtml(docNames.join(', ')) : '—'}</div>
+  ${itemsHtml}
+</body></html>`;
+}
+
+function downloadStudySummary(){
+  if(!lastResults.length) return;
+  const html = buildStudySummaryHtml();
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().slice(0,10);
+  a.href = url;
+  a.download = `resumo-estudo-${stamp}.html`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+summaryBtn.addEventListener('click', downloadStudySummary);
+</script>
+</body>
+</html>
