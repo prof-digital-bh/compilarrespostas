@@ -1074,13 +1074,23 @@ async function analyzeWithAI(question, contextParas, allowWebSearch, disciplina)
   const altsText = question.alts.map(a => `${a.letter}) ${a.text}`).join('\n');
   const letterKeys = question.alts.map(a => a.letter);
   const probTemplate = letterKeys.map(l => `"${l}":0`).join(',');
+  const avalTemplate = letterKeys.map(l => `"${l}":"verdadeira ou falsa + motivo bem breve"`).join(',');
   const disciplinaLine = disciplina ? `\nDISCIPLINA: ${disciplina}` : '';
+  const negative = isNegativeQuestion(question.text);
 
   const searchInstruction = allowWebSearch
-    ? 'O material de estudo enviado é a fonte PRINCIPAL e deve ser priorizada. Além dele, você pode usar a ferramenta de busca na internet para confirmar o fato, complementar o que estiver incompleto no material, ou resolver a questão quando o material não cobrir o assunto com clareza. Se você consultar alguma fonte externa (internet), preencha "fonte_externa_usada":true e informe em "fonte_externa_descricao" um resumo (1 frase) do que essa fonte confirmou, e em "fonte_externa_url" o link, se disponível.'
+    ? 'O material de estudo enviado é o ponto de partida, mas não é infalível: pode ser um resumo simplificado, desatualizado ou impreciso. Use a busca na internet sempre que precisar confirmar se a caracterização de uma alternativa está de acordo com o entendimento consolidado/mais preciso da área (livros de referência, artigos, fontes acadêmicas), não só para preencher lacunas. Se o que você encontrar na internet divergir do material enviado em algo relevante para a resposta, priorize a informação tecnicamente mais correta e explique a divergência na justificativa. Se consultar alguma fonte externa, preencha "fonte_externa_usada":true, "fonte_externa_descricao" (1 frase do que ela confirmou) e "fonte_externa_url".'
     : 'Decida usando apenas o material de estudo abaixo, sem consultar a internet e sem conhecimento externo.';
 
-  const userPrompt = `Responda à questão de múltipla escolha abaixo com base no material de estudo enviado. ${searchInstruction}
+  const negativeInstruction = negative
+    ? `\n\nATENÇÃO: este enunciado pede a alternativa INCORRETA/FALSA/EXCETO. Erros comuns nesse tipo de questão acontecem quando se escolhe por semelhança superficial de palavras, em vez de julgar cada alternativa como afirmação verdadeira ou falsa. Para evitar isso, faça o seguinte antes de decidir:
+1. Julgue CADA alternativa (${letterKeys.join(', ')}) individualmente como VERDADEIRA ou FALSA em relação ao tema, considerando o material E (se disponível) o que há de mais preciso/consolidado sobre o assunto — não apenas se ela repete palavras do material.
+2. Preste atenção especial a alternativas que soam plausíveis mas contêm uma afirmação categórica (ex.: "devem sempre", "apenas", "exclusivamente", "ilimitado") que pode contrariar a definição real do conceito.
+3. Só depois de avaliar todas, escolha como "letra_correta" a única (ou a mais claramente) FALSA — essa é a resposta para "marque a incorreta".
+4. Preencha "avaliacao_por_alternativa" com o veredito breve de cada uma, para deixar seu raciocínio auditável.`
+    : '';
+
+  const userPrompt = `Responda à questão de múltipla escolha abaixo com base no material de estudo enviado. ${searchInstruction}${negativeInstruction}
 ${disciplinaLine}
 MATERIAL ENVIADO PELO USUÁRIO:
 ${contextText}
@@ -1091,13 +1101,13 @@ ${question.text}
 ALTERNATIVAS:
 ${altsText}
 
-Responda SOMENTE com um objeto JSON válido, sem markdown e sem nenhum texto fora do JSON (nem antes, nem depois — mesmo que você tenha usado a busca na internet, a resposta final deve ser só este JSON), exatamente neste formato:
-{"probabilidades":{${probTemplate}},"letra_correta":"${letterKeys[0]}","justificativa":"1 a 2 frases em português explicando por que essa alternativa é a correta","encontrado_no_texto":true,"fonte_externa_usada":false,"fonte_externa_descricao":"","fonte_externa_url":""}
-As probabilidades são um palpite de 0 a 100 de cada alternativa estar correta (não precisam somar 100).`;
+Responda SOMENTE com um objeto JSON válido, sem markdown e sem nenhum texto fora do JSON (nem antes, nem depois — mesmo que você tenha usado a busca na internet ou raciocinado em etapas, a resposta final deve ser só este JSON), exatamente neste formato:
+{"avaliacao_por_alternativa":{${avalTemplate}},"probabilidades":{${probTemplate}},"letra_correta":"${letterKeys[0]}","justificativa":"1 a 2 frases em português explicando por que essa é a resposta pedida pelo enunciado","encontrado_no_texto":true,"fonte_externa_usada":false,"fonte_externa_descricao":"","fonte_externa_url":""}
+As probabilidades são um palpite de 0 a 100 de cada alternativa ser a resposta pedida pelo enunciado (não precisam somar 100).`;
 
   const systemPrompt = allowWebSearch
-    ? "Você decide questões de múltipla escolha usando primariamente o material fornecido pelo usuário. Quando necessário para confirmar ou complementar, você pode usar a ferramenta de busca na internet, preferindo fontes confiáveis (sites oficiais, artigos acadêmicos, referências reconhecidas do assunto). Nunca invente informação. Se a questão pedir a alternativa INCORRETA, FALSA ou EXCETO, leve isso em conta ao decidir. Depois de eventuais buscas, responda apenas com o objeto JSON pedido, nada além disso, sem crases nem markdown."
-    : "Você decide questões de múltipla escolha usando apenas o material fornecido pelo usuário, sem conhecimento externo. Nunca invente informação que não esteja no material. Se a questão pedir a alternativa INCORRETA, FALSA ou EXCETO, leve isso em conta ao decidir. Responda apenas com o objeto JSON pedido, nada além disso, sem crases nem markdown.";
+    ? "Você decide questões de múltipla escolha com rigor acadêmico, usando o material fornecido pelo usuário como ponto de partida mas não como fonte inquestionável — ele pode estar simplificado ou impreciso. Sempre que a questão exigir (especialmente em questões que pedem a alternativa INCORRETA/FALSA/EXCETO), julgue cada alternativa individualmente como verdadeira ou falsa frente ao conhecimento consolidado da área, usando a busca na internet para checar pontos de dúvida em fontes confiáveis (livros de referência, artigos acadêmicos, sites oficiais). Nunca decida só por semelhança textual superficial entre a alternativa e o material. Nunca invente informação. Responda apenas com o objeto JSON pedido, nada além disso, sem crases nem markdown."
+    : "Você decide questões de múltipla escolha com rigor, usando apenas o material fornecido pelo usuário, sem conhecimento externo. Julgue cada alternativa individualmente como verdadeira ou falsa em vez de decidir só por semelhança textual superficial. Nunca invente informação que não esteja no material. Se a questão pedir a alternativa INCORRETA, FALSA ou EXCETO, leve isso em conta cuidadosamente ao decidir. Responda apenas com o objeto JSON pedido, nada além disso, sem crases nem markdown.";
 
   const usingOwnKey = !!userApiKey;
   const headers = { "Content-Type": "application/json" };
@@ -1111,7 +1121,7 @@ As probabilidades são um palpite de 0 a 100 de cada alternativa estar correta (
 
   const body = {
     model,
-    max_tokens: 1500,
+    max_tokens: 2000,
     system: systemPrompt,
     messages: [{ role: "user", content: userPrompt }]
   };
