@@ -521,12 +521,20 @@
         Usar IA (Claude) para decidir — analisa o significado, não só palavras parecidas
       </label>
     </div>
+    <div class="row" id="apiKeyRow" style="margin-top:4px;">
+      <input type="password" id="apiKeyInput" placeholder="sk-ant-... (sua chave da API Anthropic)" autocomplete="off"
+        style="flex:1;min-width:220px;border:1px solid var(--line);border-radius:2px;background:#fff;color:var(--ink);padding:8px 10px;font-family:'Courier New',monospace;font-size:12.5px;">
+      <button class="btn ghost small" id="saveKeyBtn">Salvar chave</button>
+      <button class="btn ghost small" id="clearKeyBtn">Remover chave</button>
+      <span class="raw-feedback" id="keyStatus"></span>
+    </div>
+    <div class="hint">Fora do Claude.ai, a IA só funciona se você colar aqui sua própria chave da API Anthropic (crie em <span style="text-decoration:underline;">console.anthropic.com</span>). A chave fica salva só no seu navegador (localStorage) e é enviada direto da sua máquina para a API da Anthropic — nunca passa por nenhum servidor terceiro. Ainda assim, qualquer código no seu navegador pode em teoria ler essa chave; não use este arquivo em computadores/sites que não são de confiança. Dentro do Claude.ai, deixe o campo vazio — a IA funciona sem chave.</div>
     <div class="row" style="margin-top:20px;border-top:1px solid var(--line);padding-top:16px;">
       <button class="btn" id="searchBtn">Analisar alternativas</button>
       <button class="btn ghost" id="clearBtn">Limpar tudo</button>
       <span class="progress" id="progress"></span>
     </div>
-    <div class="hint">Com IA ligada, o Claude lê o(s) trecho(s) mais relevantes do PDF e decide qual alternativa está correta pelo significado (funciona só enquanto este artefato está aberto aqui no chat/Claude.ai). Se a IA falhar ou estiver desligada, o sistema usa o modo de aproximação por palavras (menos confiável, mas funciona offline).</div>
+    <div class="hint">Com IA ligada, o Claude lê o(s) trecho(s) mais relevantes do PDF e decide qual alternativa está correta pelo significado. Se a IA falhar ou estiver desligada, o sistema usa o modo de aproximação por palavras (menos confiável, mas funciona offline).</div>
   </section>
 
   <section class="card" data-label="03 — Resultados" id="resultsCard" style="display:none;">
@@ -977,6 +985,37 @@ function selectContext(qWords, allAltWords, paragraphs, maxParas, maxChars){
     }));
 }
 
+// ---------- chave de API (para uso fora do Claude.ai) ----------
+let userApiKey = '';
+const apiKeyInput = document.getElementById('apiKeyInput');
+const keyStatusEl = document.getElementById('keyStatus');
+
+(function loadStoredKey(){
+  try{
+    const stored = window.localStorage.getItem('achador_anthropic_key');
+    if(stored){
+      userApiKey = stored;
+      apiKeyInput.value = stored;
+      keyStatusEl.textContent = 'chave carregada deste navegador';
+    }
+  }catch(e){ /* localStorage indisponível (ex.: dentro do artefato do Claude.ai) — segue sem persistir */ }
+})();
+
+document.getElementById('saveKeyBtn').addEventListener('click', () => {
+  userApiKey = apiKeyInput.value.trim();
+  try{ window.localStorage.setItem('achador_anthropic_key', userApiKey); }catch(e){ /* ignora */ }
+  keyStatusEl.textContent = userApiKey ? 'chave salva neste navegador' : '';
+  setTimeout(()=> keyStatusEl.textContent = '', 3000);
+});
+
+document.getElementById('clearKeyBtn').addEventListener('click', () => {
+  userApiKey = '';
+  apiKeyInput.value = '';
+  try{ window.localStorage.removeItem('achador_anthropic_key'); }catch(e){ /* ignora */ }
+  keyStatusEl.textContent = 'chave removida';
+  setTimeout(()=> keyStatusEl.textContent = '', 3000);
+});
+
 async function analyzeWithAI(question, contextParas){
   const contextText = contextParas.length
     ? contextParas.map((p,i) => `[Trecho ${i+1} — ${p.docName}, pág. ${p.page}]\n${p.text}`).join('\n\n')
@@ -1000,18 +1039,32 @@ Responda SOMENTE com um objeto JSON válido, sem markdown e sem nenhum texto for
 {"probabilidades":{${probTemplate}},"letra_correta":"${letterKeys[0]}","justificativa":"1 a 2 frases em português explicando, com base no material, por que essa alternativa é a correta","encontrado_no_texto":true}
 As probabilidades são um palpite de 0 a 100 de cada alternativa estar correta (não precisam somar 100).`;
 
+  const systemPrompt = "Você decide questões de múltipla escolha usando apenas o material fornecido pelo usuário, sem conhecimento externo. Nunca invente informação que não esteja no material. Se a questão pedir a alternativa INCORRETA, FALSA ou EXCETO, leve isso em conta ao decidir. Responda apenas com o objeto JSON pedido, nada além disso, sem crases nem markdown.";
+
+  const usingOwnKey = !!userApiKey;
+  const headers = { "Content-Type": "application/json" };
+  let model = "claude-sonnet-4-6"; // alias usado quando rodando dentro do artefato do Claude.ai (sem chave)
+  if(usingOwnKey){
+    headers["x-api-key"] = userApiKey;
+    headers["anthropic-version"] = "2023-06-01";
+    headers["anthropic-dangerous-direct-browser-access"] = "true";
+    model = "claude-sonnet-5"; // modelo público atual, para chamadas com chave própria
+  }
+
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({
-      model: "claude-sonnet-4-6",
+      model,
       max_tokens: 500,
-      system: "Você decide questões de múltipla escolha usando apenas o material fornecido pelo usuário, sem conhecimento externo. Nunca invente informação que não esteja no material. Se a questão pedir a alternativa INCORRETA, FALSA ou EXCETO, leve isso em conta ao decidir. Responda apenas com o objeto JSON pedido, nada além disso, sem crases nem markdown.",
+      system: systemPrompt,
       messages: [{ role: "user", content: userPrompt }]
     })
   });
   if(!response.ok){
-    throw new Error('Falha na API (status ' + response.status + ')');
+    let detail = '';
+    try{ const errData = await response.json(); detail = errData?.error?.message || ''; }catch(e){}
+    throw new Error('Falha na API (status ' + response.status + ')' + (detail ? ': ' + detail : ''));
   }
   const data = await response.json();
   const textBlock = (data.content || []).find(b => b.type === 'text');
