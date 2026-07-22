@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Achador — busca de respostas em PDFs</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>
   :root{
     --paper: #eee7d8;
@@ -531,7 +532,9 @@
   <section class="card" data-label="03 — Resultados" id="resultsCard" style="display:none;">
     <div id="results"></div>
     <div class="row" id="summaryRow" style="display:none;margin-top:6px;border-top:1px solid var(--line);padding-top:16px;">
-      <button class="btn" id="summaryBtn">📄 Gerar resumo de estudo</button>
+      <button class="btn" id="summaryBtn">📄 Baixar PDF</button>
+      <button class="btn ghost" id="summaryHtmlBtn">Baixar como HTML</button>
+      <span class="progress" id="pdfProgress"></span>
       <span class="hint" style="margin-top:0;">Baixa um documento com enunciados, resposta correta, justificativa e indicação de onde aprofundar (documento/página).</span>
     </div>
   </section>
@@ -1238,7 +1241,29 @@ async function runAnalysis(){
 }
 
 // ---------- resumo de estudo (documento para baixar) ----------
-function buildStudySummaryHtml(){
+const STUDY_SUMMARY_STYLE = `
+  body{font-family:Georgia,'Iowan Old Style',serif;max-width:760px;margin:40px auto;padding:0 24px;color:#1e2a24;line-height:1.6;}
+  h1{font-size:24px;margin-bottom:4px;}
+  .meta{font-family:'Courier New',monospace;font-size:12px;color:#555;margin-bottom:28px;}
+  .item{border-top:1px solid #ccc;padding:20px 0;}
+  .item:first-of-type{border-top:none;}
+  .item-head{font-family:'Courier New',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#2f7a6d;margin-bottom:6px;}
+  .question{font-weight:700;font-size:16px;margin-bottom:10px;}
+  .alts{margin-bottom:10px;}
+  .alt{padding:4px 0;font-size:14px;}
+  .alt.correct{background:#f2debd66;border-left:3px solid #2f7a6d;padding-left:8px;font-weight:600;}
+  .tag{font-family:'Courier New',monospace;font-size:11px;color:#2f7a6d;}
+  .answer{font-size:14.5px;margin:8px 0;}
+  .justification{font-size:14px;color:#333;margin-bottom:8px;}
+  .mode-note{font-family:'Courier New',monospace;font-size:11.5px;color:#a4432e;margin-bottom:8px;}
+  .deepen{background:#f7f3e8;border-left:3px solid #d8a53e;padding:10px 14px;margin-top:8px;}
+  .deepen-label{font-family:'Courier New',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:#8a6a1e;margin-bottom:4px;}
+  .deepen-src{font-family:'Courier New',monospace;font-size:11.5px;color:#555;margin-bottom:4px;}
+  .deepen-text{font-size:13.5px;color:#444;}
+  @media print{ body{margin:0;padding:24px;} }
+`;
+
+function buildStudySummaryBodyHtml(){
   const now = new Date();
   const dataStr = now.toLocaleDateString('pt-BR') + ' ' + now.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
   const docNames = documents.map(d => d.name);
@@ -1283,40 +1308,28 @@ function buildStudySummaryHtml(){
     </div>`;
   }).join('\n');
 
+  return {
+    dataStr, docNames,
+    bodyInner: `<h1>Resumo de estudo</h1>
+  <div class="meta">Gerado em ${dataStr} · material: ${docNames.length ? escapeHtml(docNames.join(', ')) : '—'}</div>
+  ${itemsHtml}`
+  };
+}
+
+function buildStudySummaryFullHtml(){
+  const data = buildStudySummaryBodyHtml();
   return `<!DOCTYPE html>
 <html lang="pt-BR"><head><meta charset="UTF-8">
 <title>Resumo de estudo</title>
-<style>
-  body{font-family:Georgia,'Iowan Old Style',serif;max-width:760px;margin:40px auto;padding:0 24px;color:#1e2a24;line-height:1.6;}
-  h1{font-size:24px;margin-bottom:4px;}
-  .meta{font-family:'Courier New',monospace;font-size:12px;color:#555;margin-bottom:28px;}
-  .item{border-top:1px solid #ccc;padding:20px 0;}
-  .item:first-of-type{border-top:none;}
-  .item-head{font-family:'Courier New',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#2f7a6d;margin-bottom:6px;}
-  .question{font-weight:700;font-size:16px;margin-bottom:10px;}
-  .alts{margin-bottom:10px;}
-  .alt{padding:4px 0;font-size:14px;}
-  .alt.correct{background:#f2debd66;border-left:3px solid #2f7a6d;padding-left:8px;font-weight:600;}
-  .tag{font-family:'Courier New',monospace;font-size:11px;color:#2f7a6d;}
-  .answer{font-size:14.5px;margin:8px 0;}
-  .justification{font-size:14px;color:#333;margin-bottom:8px;}
-  .mode-note{font-family:'Courier New',monospace;font-size:11.5px;color:#a4432e;margin-bottom:8px;}
-  .deepen{background:#f7f3e8;border-left:3px solid #d8a53e;padding:10px 14px;margin-top:8px;}
-  .deepen-label{font-family:'Courier New',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:#8a6a1e;margin-bottom:4px;}
-  .deepen-src{font-family:'Courier New',monospace;font-size:11.5px;color:#555;margin-bottom:4px;}
-  .deepen-text{font-size:13.5px;color:#444;}
-  @media print{ body{margin:0;padding:24px;} }
-</style></head>
+<style>${STUDY_SUMMARY_STYLE}</style></head>
 <body>
-  <h1>Resumo de estudo</h1>
-  <div class="meta">Gerado em ${dataStr} · material: ${docNames.length ? escapeHtml(docNames.join(', ')) : '—'}</div>
-  ${itemsHtml}
+  ${data.bodyInner}
 </body></html>`;
 }
 
-function downloadStudySummary(){
+function downloadStudySummaryHtmlFile(){
   if(!lastResults.length) return;
-  const html = buildStudySummaryHtml();
+  const html = buildStudySummaryFullHtml();
   const blob = new Blob([html], { type: 'text/html' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1329,7 +1342,46 @@ function downloadStudySummary(){
   URL.revokeObjectURL(url);
 }
 
-summaryBtn.addEventListener('click', downloadStudySummary);
+async function downloadStudySummaryPDF(){
+  if(!lastResults.length) return;
+  const pdfProgress = document.getElementById('pdfProgress');
+  summaryBtn.disabled = true;
+  pdfProgress.textContent = 'gerando PDF…';
+
+  const data = buildStudySummaryBodyHtml();
+  const container = document.createElement('div');
+  container.style.position = 'fixed';
+  container.style.left = '-9999px';
+  container.style.top = '0';
+  container.style.width = '760px';
+  container.style.background = '#ffffff';
+  container.innerHTML = `<style>${STUDY_SUMMARY_STYLE}</style><div style="margin:0;padding:24px;">${data.bodyInner}</div>`;
+  document.body.appendChild(container);
+
+  const stamp = new Date().toISOString().slice(0,10);
+
+  try{
+    await html2pdf().set({
+      margin: 10,
+      filename: `resumo-estudo-${stamp}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak: { mode: ['css', 'avoid-all'] }
+    }).from(container).save();
+  }catch(err){
+    console.error('Falha ao gerar PDF:', err);
+    pdfProgress.textContent = 'erro ao gerar PDF — tente "Baixar como HTML" e imprima em PDF pelo navegador.';
+    setTimeout(()=> pdfProgress.textContent = '', 5000);
+  }finally{
+    container.remove();
+    summaryBtn.disabled = false;
+    if(pdfProgress.textContent === 'gerando PDF…') pdfProgress.textContent = '';
+  }
+}
+
+summaryBtn.addEventListener('click', downloadStudySummaryPDF);
+document.getElementById('summaryHtmlBtn').addEventListener('click', downloadStudySummaryHtmlFile);
 </script>
 </body>
 </html>
