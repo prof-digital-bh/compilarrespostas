@@ -799,6 +799,20 @@ function clearQuestion(id){
     const rawBox = card.querySelector('.raw-box');
     if(rawBox) rawBox.focus();
   }
+
+  // remove também o resultado antigo dessa questão (tela + PDF), pra não ficar
+  // aparecendo um resultado de uma questão que já foi apagada
+  if(lastResults.length){
+    lastResults = lastResults.filter(r => r.qId !== id);
+    lastResults.forEach((r, i) => { r.index = i + 1; });
+  }
+  const resultBlock = resultsEl.querySelector(`.qblock[data-qid="${id}"]`);
+  if(resultBlock) resultBlock.remove();
+  if(lastResults.length === 0){
+    resultsCard.style.display = 'none';
+    resultsEl.innerHTML = '';
+    summaryRow.style.display = 'none';
+  }
 }
 function addAlt(qId){
   const q = questionModel.find(q => q.id === qId);
@@ -1041,6 +1055,18 @@ document.getElementById('clearKeyBtn').addEventListener('click', () => {
   setTimeout(()=> keyStatusEl.textContent = '', 3000);
 });
 
+// ---------- disciplina selecionada (fica salva só no localStorage deste navegador) ----------
+const disciplinaSelectEl = document.getElementById('disciplinaSelect');
+(function loadStoredDisciplina(){
+  try{
+    const stored = window.localStorage.getItem('achador_disciplina');
+    if(stored) disciplinaSelectEl.value = stored;
+  }catch(e){ /* localStorage indisponível — segue sem persistir */ }
+})();
+disciplinaSelectEl.addEventListener('change', () => {
+  try{ window.localStorage.setItem('achador_disciplina', disciplinaSelectEl.value); }catch(e){ /* ignora */ }
+});
+
 async function analyzeWithAI(question, contextParas, allowWebSearch, disciplina){
   const contextText = contextParas.length
     ? contextParas.map((p,i) => `[Trecho ${i+1} — ${p.docName}, pág. ${p.page}]\n${p.text}`).join('\n\n')
@@ -1130,6 +1156,7 @@ document.getElementById('clearBtn').addEventListener('click', () => {
   lastResults = [];
   summaryRow.style.display = 'none';
   document.getElementById('disciplinaSelect').value = '';
+  try{ window.localStorage.removeItem('achador_disciplina'); }catch(e){ /* ignora */ }
 });
 
 function buildAltResultsHtml(question, opts){
@@ -1286,6 +1313,7 @@ async function runAnalysis(){
 
     lastResults.push({
       index: idx + 1,
+      qId: q.id,
       question: q.text,
       alts: q.alts,
       chosenLetter: result.chosenLetter,
@@ -1302,6 +1330,7 @@ async function runAnalysis(){
 
     const block = document.createElement('div');
     block.className = 'qblock';
+    block.dataset.qid = q.id;
 
     const title = document.createElement('div');
     title.className = 'qtitle';
