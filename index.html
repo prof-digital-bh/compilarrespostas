@@ -521,6 +521,12 @@
         Usar IA (Claude) para decidir — analisa o significado, não só palavras parecidas
       </label>
     </div>
+    <div class="row ai-toggle-row" style="margin-top:2px;">
+      <label class="switch-label">
+        <input type="checkbox" id="useWebSearch" checked>
+        Também consultar fontes na internet para confirmar/completar a resposta (além do material enviado)
+      </label>
+    </div>
     <div class="row" id="apiKeyRow" style="margin-top:4px;">
       <input type="password" id="apiKeyInput" placeholder="sk-ant-... (sua chave da API Anthropic)" autocomplete="off"
         style="flex:1;min-width:220px;border:1px solid var(--line);border-radius:2px;background:#fff;color:var(--ink);padding:8px 10px;font-family:'Courier New',monospace;font-size:12.5px;">
@@ -534,7 +540,7 @@
       <button class="btn ghost" id="clearBtn">Limpar tudo</button>
       <span class="progress" id="progress"></span>
     </div>
-    <div class="hint">Com IA ligada, o Claude lê o(s) trecho(s) mais relevantes do PDF e decide qual alternativa está correta pelo significado. Se a IA falhar ou estiver desligada, o sistema usa o modo de aproximação por palavras (menos confiável, mas funciona offline).</div>
+    <div class="hint">Com IA ligada, o Claude lê o(s) trecho(s) mais relevantes do PDF e decide qual alternativa está correta pelo significado. Com "consultar fontes na internet" também ligado, ele pode pesquisar na web para confirmar ou complementar o que o material enviado não deixa claro, priorizando sempre o material como fonte principal. Se a IA falhar ou estiver desligada, o sistema usa o modo de aproximação por palavras (menos confiável, mas funciona offline).</div>
   </section>
 
   <section class="card" data-label="03 — Resultados" id="resultsCard" style="display:none;">
@@ -1016,17 +1022,21 @@ document.getElementById('clearKeyBtn').addEventListener('click', () => {
   setTimeout(()=> keyStatusEl.textContent = '', 3000);
 });
 
-async function analyzeWithAI(question, contextParas){
+async function analyzeWithAI(question, contextParas, allowWebSearch){
   const contextText = contextParas.length
     ? contextParas.map((p,i) => `[Trecho ${i+1} — ${p.docName}, pág. ${p.page}]\n${p.text}`).join('\n\n')
-    : '(nenhum trecho claramente relevante foi localizado automaticamente no material)';
+    : '(nenhum trecho claramente relevante foi localizado automaticamente no material enviado)';
   const altsText = question.alts.map(a => `${a.letter}) ${a.text}`).join('\n');
   const letterKeys = question.alts.map(a => a.letter);
   const probTemplate = letterKeys.map(l => `"${l}":0`).join(',');
 
-  const userPrompt = `Com base exclusivamente no material de estudo abaixo, responda à questão de múltipla escolha. Não use conhecimento externo — decida só com o que está no material.
+  const searchInstruction = allowWebSearch
+    ? 'O material de estudo enviado é a fonte PRINCIPAL e deve ser priorizada. Além dele, você pode usar a ferramenta de busca na internet para confirmar o fato, complementar o que estiver incompleto no material, ou resolver a questão quando o material não cobrir o assunto com clareza. Se você consultar alguma fonte externa (internet), preencha "fonte_externa_usada":true e informe em "fonte_externa_descricao" um resumo (1 frase) do que essa fonte confirmou, e em "fonte_externa_url" o link, se disponível.'
+    : 'Decida usando apenas o material de estudo abaixo, sem consultar a internet e sem conhecimento externo.';
 
-MATERIAL:
+  const userPrompt = `Responda à questão de múltipla escolha abaixo com base no material de estudo enviado. ${searchInstruction}
+
+MATERIAL ENVIADO PELO USUÁRIO:
 ${contextText}
 
 QUESTÃO:
@@ -1035,11 +1045,13 @@ ${question.text}
 ALTERNATIVAS:
 ${altsText}
 
-Responda SOMENTE com um objeto JSON válido, sem markdown e sem nenhum texto fora do JSON, exatamente neste formato:
-{"probabilidades":{${probTemplate}},"letra_correta":"${letterKeys[0]}","justificativa":"1 a 2 frases em português explicando, com base no material, por que essa alternativa é a correta","encontrado_no_texto":true}
+Responda SOMENTE com um objeto JSON válido, sem markdown e sem nenhum texto fora do JSON (nem antes, nem depois — mesmo que você tenha usado a busca na internet, a resposta final deve ser só este JSON), exatamente neste formato:
+{"probabilidades":{${probTemplate}},"letra_correta":"${letterKeys[0]}","justificativa":"1 a 2 frases em português explicando por que essa alternativa é a correta","encontrado_no_texto":true,"fonte_externa_usada":false,"fonte_externa_descricao":"","fonte_externa_url":""}
 As probabilidades são um palpite de 0 a 100 de cada alternativa estar correta (não precisam somar 100).`;
 
-  const systemPrompt = "Você decide questões de múltipla escolha usando apenas o material fornecido pelo usuário, sem conhecimento externo. Nunca invente informação que não esteja no material. Se a questão pedir a alternativa INCORRETA, FALSA ou EXCETO, leve isso em conta ao decidir. Responda apenas com o objeto JSON pedido, nada além disso, sem crases nem markdown.";
+  const systemPrompt = allowWebSearch
+    ? "Você decide questões de múltipla escolha usando primariamente o material fornecido pelo usuário. Quando necessário para confirmar ou complementar, você pode usar a ferramenta de busca na internet, preferindo fontes confiáveis (sites oficiais, artigos acadêmicos, referências reconhecidas do assunto). Nunca invente informação. Se a questão pedir a alternativa INCORRETA, FALSA ou EXCETO, leve isso em conta ao decidir. Depois de eventuais buscas, responda apenas com o objeto JSON pedido, nada além disso, sem crases nem markdown."
+    : "Você decide questões de múltipla escolha usando apenas o material fornecido pelo usuário, sem conhecimento externo. Nunca invente informação que não esteja no material. Se a questão pedir a alternativa INCORRETA, FALSA ou EXCETO, leve isso em conta ao decidir. Responda apenas com o objeto JSON pedido, nada além disso, sem crases nem markdown.";
 
   const usingOwnKey = !!userApiKey;
   const headers = { "Content-Type": "application/json" };
@@ -1051,15 +1063,20 @@ As probabilidades são um palpite de 0 a 100 de cada alternativa estar correta (
     model = "claude-sonnet-5"; // modelo público atual, para chamadas com chave própria
   }
 
+  const body = {
+    model,
+    max_tokens: 1500,
+    system: systemPrompt,
+    messages: [{ role: "user", content: userPrompt }]
+  };
+  if(allowWebSearch){
+    body.tools = [{ type: "web_search_20250305", name: "web_search" }];
+  }
+
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers,
-    body: JSON.stringify({
-      model,
-      max_tokens: 500,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userPrompt }]
-    })
+    body: JSON.stringify(body)
   });
   if(!response.ok){
     let detail = '';
@@ -1067,10 +1084,17 @@ As probabilidades são um palpite de 0 a 100 de cada alternativa estar correta (
     throw new Error('Falha na API (status ' + response.status + ')' + (detail ? ': ' + detail : ''));
   }
   const data = await response.json();
-  const textBlock = (data.content || []).find(b => b.type === 'text');
-  if(!textBlock || !textBlock.text) throw new Error('Resposta da IA sem conteúdo de texto.');
-  let clean = textBlock.text.trim();
-  clean = clean.replace(/^```json/i, '').replace(/^```/, '').replace(/```$/, '').trim();
+  // com busca na internet ativada, a resposta pode ter vários blocos (buscas, resultados, texto);
+  // o texto final (o JSON pedido) fica nos blocos do tipo "text" — concatena todos e usa o último trecho que parece JSON.
+  const textBlocks = (data.content || []).filter(b => b.type === 'text' && b.text);
+  if(!textBlocks.length) throw new Error('Resposta da IA sem conteúdo de texto.');
+  let raw = textBlocks[textBlocks.length - 1].text.trim();
+  let clean = raw.replace(/^```json/i, '').replace(/^```/, '').replace(/```$/, '').trim();
+  // se ainda assim vier texto extra ao redor do JSON, extrai só o primeiro objeto { ... } válido
+  if(!clean.startsWith('{')){
+    const match = clean.match(/\{[\s\S]*\}/);
+    if(match) clean = match[0];
+  }
   const parsed = JSON.parse(clean);
   if(!parsed.letra_correta) throw new Error('JSON da IA sem letra_correta.');
   return parsed;
@@ -1175,6 +1199,7 @@ async function runAnalysis(){
   }
 
   const useAI = document.getElementById('useAI').checked;
+  const useWebSearch = useAI && document.getElementById('useWebSearch').checked;
   const searchBtn = document.getElementById('searchBtn');
   searchBtn.disabled = true;
   resultsEl.innerHTML = '';
@@ -1185,7 +1210,9 @@ async function runAnalysis(){
   for(let idx = 0; idx < questions.length; idx++){
     const q = questions[idx];
     progressEl.textContent = useAI
-      ? `analisando questão ${idx+1} de ${questions.length} com IA…`
+      ? (useWebSearch
+          ? `analisando questão ${idx+1} de ${questions.length} com IA (consultando fontes na internet)…`
+          : `analisando questão ${idx+1} de ${questions.length} com IA…`)
       : `analisando questão ${idx+1} de ${questions.length}…`;
 
     const qWords = contentWords(q.text);
@@ -1196,7 +1223,7 @@ async function runAnalysis(){
       try{
         const allAltWords = q.alts.flatMap(a => contentWords(a.text));
         const contextParas = selectContext(qWords, allAltWords, allParagraphs, 6, 650);
-        const ai = await analyzeWithAI(q, contextParas);
+        const ai = await analyzeWithAI(q, contextParas, useWebSearch);
         const pctByLetter = {};
         q.alts.forEach(a => pctByLetter[a.letter] = (ai.probabilidades && typeof ai.probabilidades[a.letter] === 'number') ? ai.probabilidades[a.letter] : 0);
         let evidenceHtml = '';
@@ -1212,6 +1239,9 @@ async function runAnalysis(){
             ${highlight(top.text, [...qWords, ...altWords])}
           </div>`;
         }
+        const externalSource = ai.fonte_externa_usada
+          ? { descricao: ai.fonte_externa_descricao || '', url: ai.fonte_externa_url || '' }
+          : null;
         result = {
           mode: 'ai',
           chosenLetter: ai.letra_correta,
@@ -1220,6 +1250,7 @@ async function runAnalysis(){
           evidenceHtml,
           evidenceSource,
           evidenceText,
+          externalSource,
           foundInText: ai.encontrado_no_texto !== false
         };
       }catch(err){
@@ -1242,7 +1273,8 @@ async function runAnalysis(){
       foundInText: result.foundInText,
       negative,
       evidenceSource: result.evidenceSource || null,
-      evidenceText: result.evidenceText || ''
+      evidenceText: result.evidenceText || '',
+      externalSource: result.externalSource || null
     });
 
     const block = document.createElement('div');
@@ -1270,6 +1302,13 @@ async function runAnalysis(){
         : 'apontando a alternativa mais sustentada por palavras do texto (modo aproximado)';
     }
     block.appendChild(verdict);
+
+    if(result.externalSource){
+      const extDiv = document.createElement('div');
+      extDiv.className = 'evidence';
+      extDiv.innerHTML = `<span class="src">🌐 fonte externa consultada pela IA${result.externalSource.url ? ' · ' + escapeHtml(result.externalSource.url) : ''}</span>${escapeHtml(result.externalSource.descricao || '')}`;
+      block.appendChild(extDiv);
+    }
 
     buildAltResultsHtml(q, result).forEach(div => block.appendChild(div));
 
@@ -1350,6 +1389,14 @@ function buildStudySummaryBodyHtml(){
         </div>`
       : `<div class="deepen"><div class="deepen-label">Para aprofundar</div><div class="deepen-text">Nenhum trecho específico localizado — revise o material completo sobre este tema.</div></div>`;
 
+    const fonteExterna = r.externalSource
+      ? `<div class="deepen" style="border-left-color:#2f7a6d;background:#eef5f2;">
+          <div class="deepen-label" style="color:#22514a;">🌐 Fonte externa consultada pela IA</div>
+          ${r.externalSource.url ? `<div class="deepen-src">${escapeHtml(r.externalSource.url)}</div>` : ''}
+          <div class="deepen-text">${escapeHtml(r.externalSource.descricao || '')}</div>
+        </div>`
+      : '';
+
     return `<div class="item">
       <div class="item-head">Questão ${r.index}</div>
       <div class="question">${escapeHtml(r.question)}</div>
@@ -1358,6 +1405,7 @@ function buildStudySummaryBodyHtml(){
       ${r.justification ? `<div class="justification">${escapeHtml(r.justification)}</div>` : ''}
       ${modeNote ? `<div class="mode-note">${escapeHtml(modeNote)}</div>` : ''}
       ${aprofundamento}
+      ${fonteExterna}
     </div>`;
   }).join('\n');
 
