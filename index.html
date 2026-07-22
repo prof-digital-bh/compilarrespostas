@@ -556,7 +556,7 @@
     <div class="hint">Fora do Claude.ai, a IA só funciona se você colar aqui sua própria chave da API Anthropic (crie em <span style="text-decoration:underline;">console.anthropic.com</span>). A chave fica salva só no seu navegador (localStorage) e é enviada direto da sua máquina para a API da Anthropic — nunca passa por nenhum servidor terceiro. Ainda assim, qualquer código no seu navegador pode em teoria ler essa chave; não use este arquivo em computadores/sites que não são de confiança. Dentro do Claude.ai, deixe o campo vazio — a IA funciona sem chave.</div>
     <div class="row" style="margin-top:20px;border-top:1px solid var(--line);padding-top:16px;">
       <button class="btn" id="searchBtn">Analisar alternativas</button>
-      <button class="btn ghost" id="clearBtn">Limpar tudo</button>
+      <button class="btn ghost" id="clearBtn" title="Apaga as questões e resultados atuais e reseta a disciplina selecionada">Limpar tudo / nova disciplina</button>
       <span class="progress" id="progress"></span>
     </div>
     <div class="hint">Com IA ligada, o Claude lê o(s) trecho(s) mais relevantes do PDF e decide qual alternativa está correta pelo significado. Com "consultar fontes na internet" também ligado, ele pode pesquisar na web para confirmar ou complementar o que o material enviado não deixa claro, priorizando sempre o material como fonte principal. Se a IA falhar ou estiver desligada, o sistema usa o modo de aproximação por palavras (menos confiável, mas funciona offline).</div>
@@ -1129,6 +1129,7 @@ document.getElementById('clearBtn').addEventListener('click', () => {
   resultsEl.innerHTML = '';
   lastResults = [];
   summaryRow.style.display = 'none';
+  document.getElementById('disciplinaSelect').value = '';
 });
 
 function buildAltResultsHtml(question, opts){
