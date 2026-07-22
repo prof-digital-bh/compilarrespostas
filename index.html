@@ -1367,6 +1367,7 @@ const STUDY_SUMMARY_STYLE = `
   .alts{margin-bottom:10px;}
   .alt{padding:4px 0;font-size:14px;}
   .alt.correct{background:#f2debd66;border-left:3px solid #2f7a6d;padding-left:8px;font-weight:600;}
+  .alt-comment{font-weight:400;font-style:italic;font-size:13px;color:#4a5850;margin-top:3px;}
   .tag{font-family:'Courier New',monospace;font-size:11px;color:#2f7a6d;}
   .answer{font-size:14.5px;margin:8px 0;}
   .justification{font-size:14px;color:#333;margin-bottom:8px;}
@@ -1385,11 +1386,14 @@ function buildStudySummaryBodyHtml(){
   const disciplina = (lastResults[0] && lastResults[0].disciplina) || document.getElementById('disciplinaSelect').value || '';
 
   const itemsHtml = lastResults.map(r => {
-    const chosenAlt = r.alts.find(a => a.letter === r.chosenLetter);
     const altsHtml = r.alts.map(a => {
       const isCorrect = a.letter === r.chosenLetter;
+      const comment = isCorrect && r.justification
+        ? `<div class="alt-comment">${escapeHtml(r.justification)}</div>`
+        : '';
       return `<div class="alt${isCorrect ? ' correct' : ''}">
         <strong>${escapeHtml(a.letter)})</strong> ${escapeHtml(a.text)}${isCorrect ? ' <span class="tag">✓ correta</span>' : ''}
+        ${comment}
       </div>`;
     }).join('');
 
@@ -1425,8 +1429,6 @@ function buildStudySummaryBodyHtml(){
       <div class="item-head">Questão ${r.index}</div>
       <div class="question">${escapeHtml(r.question)}</div>
       <div class="alts">${altsHtml}</div>
-      ${chosenAlt ? `<div class="answer">Resposta correta: <strong>${escapeHtml(r.chosenLetter)}) ${escapeHtml(chosenAlt.text)}</strong></div>` : ''}
-      ${r.justification ? `<div class="justification">${escapeHtml(r.justification)}</div>` : ''}
       ${modeNote ? `<div class="mode-note">${escapeHtml(modeNote)}</div>` : ''}
       ${aprofundamento}
       ${fonteExterna}
