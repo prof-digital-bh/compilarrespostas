@@ -484,9 +484,124 @@
     font-size:12px;
     color:var(--teal-bright);
   }
+
+  /* ---------- passos (navegação visual do fluxo) ---------- */
+  .steps{
+    max-width:920px;
+    margin:0 auto;
+    padding:22px 24px 0;
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    font-family:'Courier New',monospace;
+  }
+  .step{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    font-size:11.5px;
+    color:var(--ink-soft);
+    background:rgba(255,255,255,0.35);
+    border:1px solid var(--line);
+    border-radius:20px;
+    padding:6px 12px 6px 8px;
+  }
+  .step .num{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:18px;height:18px;
+    border-radius:50%;
+    background:var(--paper);
+    border:1px solid var(--line);
+    font-weight:700;
+    font-size:10.5px;
+  }
+  .step.done .num{background:var(--teal-bright);border-color:var(--teal-bright);color:var(--paper);}
+  .step.done{color:var(--teal);}
+
+  /* ---------- barra de resumo dos resultados ---------- */
+  .results-stats{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-bottom:18px;
+    padding-bottom:16px;
+    border-bottom:1px solid var(--line);
+  }
+  .stat-pill{
+    font-family:'Courier New',monospace;
+    font-size:11px;
+    letter-spacing:.02em;
+    padding:5px 11px;
+    border-radius:20px;
+    background:var(--paper);
+    border:1px solid var(--line);
+    color:var(--ink-soft);
+  }
+  .stat-pill strong{color:var(--ink);}
+  .stat-pill.ai{border-color:var(--teal-bright);color:var(--teal);}
+  .stat-pill.warn{border-color:#c98a3e;color:#8a5a1e;background:var(--mark-soft);}
+
+  /* ---------- opções avançadas recolhíveis ---------- */
+  details.adv{
+    margin-top:14px;
+    border:1px solid var(--line);
+    border-radius:2px;
+    background:rgba(255,255,255,0.25);
+    padding:2px 14px;
+  }
+  details.adv > summary{
+    cursor:pointer;
+    list-style:none;
+    font-family:'Courier New',monospace;
+    font-size:12px;
+    font-weight:700;
+    color:var(--teal);
+    padding:10px 0;
+    user-select:none;
+  }
+  details.adv > summary::-webkit-details-marker{display:none;}
+  details.adv > summary::before{content:'▸ ';}
+  details.adv[open] > summary::before{content:'▾ ';}
+  details.adv[open] > summary{border-bottom:1px solid var(--line);margin-bottom:10px;}
+  details.adv .row:first-of-type{margin-top:0;}
+  details.adv{padding-bottom:12px;}
+
+  /* ---------- análises salvas ---------- */
+  #savedList{display:grid;gap:12px;}
+  .saved-card{
+    background:var(--paper);
+    border:1px solid var(--line);
+    border-radius:2px;
+    padding:14px 16px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:14px;
+    flex-wrap:wrap;
+  }
+  .saved-card .info{min-width:200px;flex:1;}
+  .saved-card .sname{font-weight:600;font-size:15px;margin-bottom:3px;}
+  .saved-card .smeta{
+    font-family:'Courier New',monospace;
+    font-size:11px;
+    color:var(--ink-soft);
+    display:flex;
+    flex-wrap:wrap;
+    gap:4px 10px;
+  }
+  .saved-card .sbtns{display:flex;gap:6px;flex-wrap:wrap;}
+  .saved-empty{
+    font-family:'Courier New',monospace;
+    font-size:12.5px;
+    color:var(--ink-soft);
+    padding:6px 0;
+  }
   @media (max-width:600px){
     main{padding:28px 16px 80px;}
     .card{padding:20px 18px;}
+    .steps{padding:18px 16px 0;}
   }
 </style>
 </head>
@@ -498,6 +613,13 @@
   <p>Curso: Metodologia do Ensino de Geografia</p>
   <p>Suba os PDFs do curso, digite a questão com suas alternativas e o sistema indica, por aproximação de palavras, qual alternativa é mais sustentada pelo texto.</p>
 </header>
+
+<div class="steps" id="stepsNav">
+  <div class="step" id="step1"><span class="num">1</span> Documentos</div>
+  <div class="step" id="step2"><span class="num">2</span> Questões</div>
+  <div class="step" id="step3"><span class="num">3</span> Resultados</div>
+  <div class="step" id="step4"><span class="num">4</span> Análises salvas</div>
+</div>
 
 <main>
   <section class="card" data-label="01 — Documentos">
@@ -531,40 +653,54 @@
     <div class="row">
       <button class="btn ghost" id="addQBtn">+ adicionar questão</button>
     </div>
-    <div class="row ai-toggle-row">
-      <label class="switch-label">
-        <input type="checkbox" id="useAI" checked>
-        Usar IA (Claude) para decidir — analisa o significado, não só palavras parecidas
-      </label>
-    </div>
-    <div class="row ai-toggle-row" style="margin-top:2px;">
-      <label class="switch-label">
-        <input type="checkbox" id="useWebSearch" checked>
-        Também consultar fontes na internet para confirmar/completar a resposta (além do material enviado)
-      </label>
-    </div>
-    <div class="row" id="apiKeyRow" style="margin-top:4px;">
-      <input type="password" id="apiKeyInput" placeholder="sk-ant-... (sua chave da API Anthropic)" autocomplete="off"
-        style="flex:1;min-width:220px;border:1px solid var(--line);border-radius:2px;background:#fff;color:var(--ink);padding:8px 10px;font-family:'Courier New',monospace;font-size:12.5px;">
-      <button class="btn ghost small" id="saveKeyBtn">Salvar chave</button>
-      <button class="btn ghost small" id="clearKeyBtn">Remover chave</button>
-      <span class="raw-feedback" id="keyStatus"></span>
-    </div>
-    <div class="hint">Fora do Claude.ai, a IA só funciona se você colar aqui sua própria chave da API Anthropic (crie em <span style="text-decoration:underline;">console.anthropic.com</span>). A chave fica salva só no seu navegador (localStorage) e é enviada direto da sua máquina para a API da Anthropic — nunca passa por nenhum servidor terceiro. Ainda assim, qualquer código no seu navegador pode em teoria ler essa chave; não use este arquivo em computadores/sites que não são de confiança. Dentro do Claude.ai, deixe o campo vazio — a IA funciona sem chave.</div>
+    <details class="adv" id="advSettings" open>
+      <summary>Opções da IA (recomendado deixar como está)</summary>
+      <div class="row ai-toggle-row">
+        <label class="switch-label">
+          <input type="checkbox" id="useAI" checked>
+          Usar IA (Claude) para decidir — analisa o significado, não só palavras parecidas
+        </label>
+      </div>
+      <div class="row ai-toggle-row" style="margin-top:2px;">
+        <label class="switch-label">
+          <input type="checkbox" id="useWebSearch" checked>
+          Também consultar fontes na internet para confirmar/completar a resposta (além do material enviado)
+        </label>
+      </div>
+      <div class="row" id="apiKeyRow" style="margin-top:4px;">
+        <input type="password" id="apiKeyInput" placeholder="sk-ant-... (sua chave da API Anthropic)" autocomplete="off"
+          style="flex:1;min-width:220px;border:1px solid var(--line);border-radius:2px;background:#fff;color:var(--ink);padding:8px 10px;font-family:'Courier New',monospace;font-size:12.5px;">
+        <button class="btn ghost small" id="saveKeyBtn">Salvar chave</button>
+        <button class="btn ghost small" id="clearKeyBtn">Remover chave</button>
+        <span class="raw-feedback" id="keyStatus"></span>
+      </div>
+      <div class="hint">Fora do Claude.ai, a IA só funciona se você colar aqui sua própria chave da API Anthropic (crie em <span style="text-decoration:underline;">console.anthropic.com</span>). A chave fica salva só no seu navegador (localStorage) e é enviada direto da sua máquina para a API da Anthropic — nunca passa por nenhum servidor terceiro. Ainda assim, qualquer código no seu navegador pode em teoria ler essa chave; não use este arquivo em computadores/sites que não são de confiança. Dentro do Claude.ai, deixe o campo vazio — a IA funciona sem chave.</div>
+      <div class="hint">Com IA ligada, o Claude lê o(s) trecho(s) mais relevantes do PDF e decide qual alternativa está correta pelo significado. Com "consultar fontes na internet" também ligado, ele pode pesquisar na web para confirmar ou complementar o que o material enviado não deixa claro, priorizando sempre o material como fonte principal. Se a IA falhar ou estiver desligada, o sistema usa o modo de aproximação por palavras (menos confiável, mas funciona offline).</div>
+    </details>
     <div class="row" style="margin-top:20px;border-top:1px solid var(--line);padding-top:16px;">
-      <button class="btn" id="searchBtn">Analisar alternativas</button>
-      <button class="btn ghost" id="clearBtn" title="Apaga PDFs enviados, questões, resultados e a disciplina selecionada">🗑 Limpar tudo</button>
+      <button class="btn" id="searchBtn">🔎 Analisar alternativas</button>
       <span class="progress" id="progress"></span>
     </div>
-    <div class="hint">Com IA ligada, o Claude lê o(s) trecho(s) mais relevantes do PDF e decide qual alternativa está correta pelo significado. Com "consultar fontes na internet" também ligado, ele pode pesquisar na web para confirmar ou complementar o que o material enviado não deixa claro, priorizando sempre o material como fonte principal. Se a IA falhar ou estiver desligada, o sistema usa o modo de aproximação por palavras (menos confiável, mas funciona offline).</div>
   </section>
 
   <section class="card" data-label="03 — Resultados" id="resultsCard" style="display:none;">
+    <div id="resultsStats" class="results-stats" style="display:none;"></div>
     <div id="results"></div>
     <div class="row" id="summaryRow" style="display:none;margin-top:6px;border-top:1px solid var(--line);padding-top:16px;">
+      <button class="btn" id="saveAnalysisBtn">💾 Salvar esta análise</button>
       <button class="btn" id="analysisDocBtn">📚 Gerar documento de análise</button>
+      <button class="btn ghost" id="clearBtn" title="Apaga PDFs enviados, questões, resultados e a disciplina selecionada">🗑 Limpar tudo</button>
       <span class="progress" id="docProgress"></span>
-      <span class="hint" style="margin-top:0;">Gera um documento (HTML, pronto para imprimir/salvar como PDF pelo navegador) com o enunciado, a resposta, um comentário curto e uma dica bibliográfica para cada questão.</span>
+      <span class="hint" style="margin-top:0;">"Salvar" guarda esta análise numa lista (abaixo) para reabrir ou baixar depois. "Gerar documento" cria um HTML pronto para imprimir/salvar como PDF, com enunciado, resposta, comentário e dica bibliográfica de cada questão.</span>
+    </div>
+  </section>
+
+  <section class="card" data-label="04 — Análises salvas" id="savedCard">
+    <div id="savedList"></div>
+    <div class="saved-empty" id="savedEmpty">Nenhuma análise salva ainda. Analise as questões acima e clique em "💾 Salvar esta análise" para guardá-la aqui — fica disponível neste navegador mesmo depois de fechar a aba.</div>
+    <div class="row" id="savedBulkRow" style="display:none;margin-top:14px;border-top:1px solid var(--line);padding-top:14px;">
+      <button class="btn ghost small" id="downloadAllSavedBtn">📦 Baixar todas em um só documento</button>
+      <span class="hint" style="margin-top:0;">Junta todas as análises salvas num único arquivo HTML (imprimível/PDF), organizadas por nome e data.</span>
     </div>
   </section>
 </main>
@@ -584,7 +720,10 @@ const resultsCard = document.getElementById('resultsCard');
 const resultsEl = document.getElementById('results');
 const summaryRow = document.getElementById('summaryRow');
 const analysisDocBtn = document.getElementById('analysisDocBtn');
+const resultsStatsEl = document.getElementById('resultsStats');
+const saveAnalysisBtn = document.getElementById('saveAnalysisBtn');
 let lastResults = []; // guarda os dados de cada questão analisada, para gerar o resumo de estudo
+let savedAnalyses = []; // biblioteca de análises salvas pelo usuário (fica em localStorage, sobrevive a F5 e a fechar a aba)
 
 dropEl.addEventListener('click', () => fileInput.click());
 ['dragenter','dragover'].forEach(ev => dropEl.addEventListener(ev, e => {
@@ -624,6 +763,7 @@ function renderDocList(){
     });
     docListEl.appendChild(chip);
   });
+  updateStepsNav();
 }
 
 async function extractPdf(file, docEntry){
@@ -762,6 +902,44 @@ function escapeHtml(s){
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+// ---------- navegação de passos (indicador visual do progresso no fluxo) ----------
+function updateStepsNav(){
+  const s1 = document.getElementById('step1');
+  const s2 = document.getElementById('step2');
+  const s3 = document.getElementById('step3');
+  const s4 = document.getElementById('step4');
+  if(!s1) return;
+  s1.classList.toggle('done', documents.some(d => d.paragraphs && d.paragraphs.length));
+  const hasQuestion = questionModel.some(q => {
+    const el = document.querySelector(`.qcard[data-qid="${q.id}"] [data-role="question"]`);
+    return el && el.value.trim();
+  });
+  s2.classList.toggle('done', hasQuestion);
+  s3.classList.toggle('done', lastResults.length > 0);
+  s4.classList.toggle('done', savedAnalyses.length > 0);
+}
+
+// ---------- resumo visual da seção de resultados (pílulas com contagens) ----------
+function renderResultsStats(){
+  if(!lastResults.length){
+    resultsStatsEl.style.display = 'none';
+    resultsStatsEl.innerHTML = '';
+    return;
+  }
+  const total = lastResults.length;
+  const aiCount = lastResults.filter(r => r.mode === 'ai' && !r.apiError).length;
+  const fallbackCount = total - aiCount;
+  const uncertainCount = lastResults.filter(r => r.apiError || r.foundInText === false).length;
+  const negativeCount = lastResults.filter(r => r.negative).length;
+  let html = `<span class="stat-pill"><strong>${total}</strong> questão${total>1?'ões':''} analisada${total>1?'s':''}</span>`;
+  if(aiCount) html += `<span class="stat-pill ai"><strong>${aiCount}</strong> via IA</span>`;
+  if(fallbackCount) html += `<span class="stat-pill"><strong>${fallbackCount}</strong> modo aproximado</span>`;
+  if(negativeCount) html += `<span class="stat-pill">${negativeCount} pedindo a incorreta/exceto</span>`;
+  if(uncertainCount) html += `<span class="stat-pill warn">⚠ ${uncertainCount} incerta${uncertainCount>1?'s':''} — confira manualmente</span>`;
+  resultsStatsEl.innerHTML = html;
+  resultsStatsEl.style.display = 'flex';
+}
+
 // ---------- persistência automática (localStorage) ----------
 // Guarda documentos, questões digitadas e resultados para sobreviverem a um
 // F5 / atualização de página. Tudo fica só no navegador do usuário — nada é
@@ -830,6 +1008,7 @@ function loadState(){
       resultsCard.style.display = 'block';
       resultsEl.innerHTML = '';
       lastResults.forEach(entry => resultsEl.appendChild(renderResultBlock(entry)));
+      renderResultsStats();
       summaryRow.style.display = 'flex';
     }
   }catch(e){
@@ -888,7 +1067,9 @@ function clearQuestion(id){
     resultsEl.innerHTML = '';
     summaryRow.style.display = 'none';
   }
+  renderResultsStats();
   saveState();
+  updateStepsNav();
 }
 function addAlt(qId){
   const q = questionModel.find(q => q.id === qId);
@@ -1043,6 +1224,7 @@ function renderQForm(){
     container.appendChild(card);
   });
   saveState();
+  updateStepsNav();
 }
 
 function collectFormValues(){
@@ -1064,6 +1246,7 @@ document.getElementById('addQBtn').addEventListener('click', newQuestion);
 // salva o que o usuário está digitando (enunciado/alternativas), com debounce
 // pra não gravar no localStorage a cada tecla
 document.getElementById('qform').addEventListener('input', debounce(saveState, 500));
+document.getElementById('qform').addEventListener('input', debounce(updateStepsNav, 300));
 
 loadState(); // tenta restaurar documentos, questões e resultados de uma sessão anterior
 if(questionModel.length === 0){
@@ -1258,10 +1441,12 @@ document.getElementById('clearBtn').addEventListener('click', () => {
   resultsEl.innerHTML = '';
   lastResults = [];
   summaryRow.style.display = 'none';
+  renderResultsStats();
   document.getElementById('disciplinaSelect').value = '';
   try{ window.localStorage.removeItem('achador_disciplina'); }catch(e){ /* ignora */ }
   try{ window.localStorage.removeItem(STATE_KEY); }catch(e){ /* ignora */ }
   saveState();
+  updateStepsNav();
 });
 
 function buildAltResultsHtml(question, opts){
@@ -1419,6 +1604,7 @@ async function runAnalysis(){
   resultsCard.style.display = 'block';
   lastResults = [];
   summaryRow.style.display = 'none';
+  renderResultsStats();
 
   for(let idx = 0; idx < questions.length; idx++){
     const q = questions[idx];
@@ -1497,6 +1683,7 @@ async function runAnalysis(){
     });
 
     resultsEl.appendChild(renderResultBlock(lastResults[lastResults.length - 1]));
+    renderResultsStats();
     resultsCard.scrollIntoView({behavior:'smooth', block:'nearest'});
     saveState(); // salva o progresso a cada questão, caso o usuário feche a aba no meio da análise
   }
@@ -1506,6 +1693,7 @@ async function runAnalysis(){
   if(lastResults.length){
     summaryRow.style.display = 'flex';
   }
+  updateStepsNav();
 }
 
 // ---------- documento de análise (documento para baixar) ----------
@@ -1556,13 +1744,14 @@ const ANALYSIS_DOC_STYLE = `
   }
 `;
 
-function buildAnalysisDocBodyHtml(){
+function buildAnalysisDocBodyHtml(resultsArg, disciplinaArg, docNamesArg){
+  const results = resultsArg || lastResults;
   const now = new Date();
   const dataStr = now.toLocaleDateString('pt-BR') + ' ' + now.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
-  const docNames = documents.map(d => d.name);
-  const disciplina = (lastResults[0] && lastResults[0].disciplina) || document.getElementById('disciplinaSelect').value || '';
+  const docNames = docNamesArg || documents.map(d => d.name);
+  const disciplina = disciplinaArg !== undefined ? disciplinaArg : ((results[0] && results[0].disciplina) || document.getElementById('disciplinaSelect').value || '');
 
-  const itemsHtml = lastResults.map(r => {
+  const itemsHtml = results.map(r => {
     const chosenAlt = r.alts.find(a => a.letter === r.chosenLetter);
 
     let modeNote = '';
@@ -1629,8 +1818,8 @@ function slugify(str){
     .slice(0, 60);
 }
 
-function buildAnalysisDocFullHtml(){
-  const data = buildAnalysisDocBodyHtml();
+function buildAnalysisDocFullHtml(resultsArg, disciplinaArg, docNamesArg){
+  const data = buildAnalysisDocBodyHtml(resultsArg, disciplinaArg, docNamesArg);
   const pageTitle = data.disciplina ? `Documento de análise — ${data.disciplina}` : 'Documento de análise';
   return `<!DOCTYPE html>
 <html lang="pt-BR"><head><meta charset="UTF-8">
@@ -1663,27 +1852,193 @@ function buildAnalysisDocFullHtml(){
 </body></html>`;
 }
 
-function downloadAnalysisDocument(){
-  if(!lastResults.length) return;
-  const data = buildAnalysisDocBodyHtml();
-  const html = buildAnalysisDocFullHtml();
+function downloadAnalysisDocument(resultsArg, disciplinaArg, docNamesArg, nameHint, progressEl){
+  const results = resultsArg || lastResults;
+  if(!results.length) return;
+  const data = buildAnalysisDocBodyHtml(resultsArg, disciplinaArg, docNamesArg);
+  const html = buildAnalysisDocFullHtml(resultsArg, disciplinaArg, docNamesArg);
   const blob = new Blob([html], { type: 'text/html' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   const stamp = new Date().toISOString().slice(0,10);
-  const nameBase = data.disciplina ? `documento-analise-${slugify(data.disciplina)}` : 'documento-analise';
+  const nameBase = nameHint ? slugify(nameHint) : (data.disciplina ? `documento-analise-${slugify(data.disciplina)}` : 'documento-analise');
   a.href = url;
   a.download = `${nameBase}-${stamp}.html`;
   document.body.appendChild(a);
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
-  const docProgress = document.getElementById('docProgress');
-  docProgress.textContent = 'documento gerado ✓ (abra e use "imprimir" pra salvar como PDF, se quiser)';
-  setTimeout(()=> docProgress.textContent = '', 6000);
+  const target = progressEl || document.getElementById('docProgress');
+  if(target){
+    target.textContent = 'documento gerado ✓ (abra e use "imprimir" pra salvar como PDF, se quiser)';
+    setTimeout(()=> target.textContent = '', 6000);
+  }
 }
 
-analysisDocBtn.addEventListener('click', downloadAnalysisDocument);
+analysisDocBtn.addEventListener('click', () => downloadAnalysisDocument());
+
+// ---------- biblioteca de análises salvas ----------
+// Cada análise salva guarda uma cópia independente dos resultados (lastResults),
+// da disciplina e dos nomes dos PDFs usados naquele momento — assim ela pode ser
+// reaberta ou baixada depois, mesmo que a análise "atual" na tela mude ou os PDFs
+// sejam removidos. Tudo fica só no localStorage deste navegador.
+const SAVED_KEY = 'achador_saved_analyses_v1';
+const savedListEl = document.getElementById('savedList');
+const savedEmptyEl = document.getElementById('savedEmpty');
+const savedBulkRow = document.getElementById('savedBulkRow');
+
+function loadSavedAnalyses(){
+  try{
+    const raw = window.localStorage.getItem(SAVED_KEY);
+    if(!raw) return;
+    const parsed = JSON.parse(raw);
+    if(Array.isArray(parsed)) savedAnalyses = parsed;
+  }catch(e){ /* localStorage indisponível ou dado corrompido — segue com lista vazia */ }
+}
+
+function persistSavedAnalyses(){
+  try{
+    window.localStorage.setItem(SAVED_KEY, JSON.stringify(savedAnalyses));
+    return true;
+  }catch(e){
+    console.error('Não foi possível salvar a análise (localStorage cheio?):', e);
+    return false;
+  }
+}
+
+function renderSavedList(){
+  savedListEl.innerHTML = '';
+  const has = savedAnalyses.length > 0;
+  savedEmptyEl.style.display = has ? 'none' : 'block';
+  savedBulkRow.style.display = has ? 'flex' : 'none';
+  savedAnalyses.forEach(entry => {
+    const card = document.createElement('div');
+    card.className = 'saved-card';
+    const qCount = entry.results.length;
+    const metaBits = [
+      entry.dataStr,
+      entry.disciplina || 'sem disciplina definida',
+      `${qCount} questão${qCount>1?'ões':''}`
+    ];
+    if(entry.docNames && entry.docNames.length) metaBits.push(entry.docNames.join(', '));
+    card.innerHTML = `
+      <div class="info">
+        <div class="sname">${escapeHtml(entry.name)}</div>
+        <div class="smeta">${metaBits.map(b => `<span>${escapeHtml(b)}</span>`).join('')}</div>
+      </div>
+      <div class="sbtns">
+        <button class="btn ghost small" data-act="open">👁 abrir</button>
+        <button class="btn ghost small" data-act="download">⬇ baixar</button>
+        <button class="btn ghost small" data-act="delete">🗑 excluir</button>
+      </div>`;
+    card.querySelector('[data-act="open"]').addEventListener('click', () => openSavedAnalysis(entry.id));
+    card.querySelector('[data-act="download"]').addEventListener('click', () => {
+      downloadAnalysisDocument(entry.results, entry.disciplina, entry.docNames, entry.name);
+    });
+    card.querySelector('[data-act="delete"]').addEventListener('click', () => deleteSavedAnalysis(entry.id));
+    savedListEl.appendChild(card);
+  });
+  updateStepsNav();
+}
+
+function saveCurrentAnalysis(){
+  if(!lastResults.length) return;
+  const disciplina = (lastResults[0] && lastResults[0].disciplina) || document.getElementById('disciplinaSelect').value || '';
+  const now = new Date();
+  const defaultName = (disciplina ? disciplina + ' — ' : 'Análise — ') + now.toLocaleDateString('pt-BR');
+  const name = window.prompt('Nome para esta análise salva:', defaultName);
+  if(name === null) return; // usuário cancelou
+  const entry = {
+    id: 'sa' + Date.now(),
+    name: name.trim() || defaultName,
+    disciplina,
+    docNames: documents.map(d => d.name),
+    dataStr: now.toLocaleDateString('pt-BR') + ' ' + now.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}),
+    results: JSON.parse(JSON.stringify(lastResults))
+  };
+  savedAnalyses.unshift(entry);
+  const ok = persistSavedAnalyses();
+  renderSavedList();
+  const docProgress = document.getElementById('docProgress');
+  docProgress.textContent = ok
+    ? 'análise salva ✓ — veja na seção "04 — Análises salvas", abaixo'
+    : '⚠ não deu pra salvar (armazenamento do navegador cheio) — tente baixar o documento em vez disso';
+  setTimeout(()=> docProgress.textContent = '', 6000);
+  if(ok) document.getElementById('savedCard').scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+saveAnalysisBtn.addEventListener('click', saveCurrentAnalysis);
+
+function openSavedAnalysis(id){
+  const entry = savedAnalyses.find(e => e.id === id);
+  if(!entry) return;
+  if(lastResults.length && !window.confirm('Isso vai substituir os resultados exibidos na tela por esta análise salva (as questões e os PDFs enviados continuam intactos). Continuar?')){
+    return;
+  }
+  lastResults = JSON.parse(JSON.stringify(entry.results));
+  if(entry.disciplina) document.getElementById('disciplinaSelect').value = entry.disciplina;
+  resultsCard.style.display = 'block';
+  resultsEl.innerHTML = '';
+  lastResults.forEach(r => resultsEl.appendChild(renderResultBlock(r)));
+  renderResultsStats();
+  summaryRow.style.display = 'flex';
+  saveState();
+  resultsCard.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+function deleteSavedAnalysis(id){
+  const entry = savedAnalyses.find(e => e.id === id);
+  if(!entry) return;
+  if(!window.confirm(`Excluir a análise salva "${entry.name}"? Essa ação não pode ser desfeita.`)) return;
+  savedAnalyses = savedAnalyses.filter(e => e.id !== id);
+  persistSavedAnalyses();
+  renderSavedList();
+}
+
+function downloadAllSavedAnalyses(){
+  if(!savedAnalyses.length) return;
+  const now = new Date();
+  const dataStr = now.toLocaleDateString('pt-BR') + ' ' + now.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+  const sections = savedAnalyses.map(entry => {
+    const body = buildAnalysisDocBodyHtml(entry.results, entry.disciplina, entry.docNames);
+    return `<div class="saved-section">
+      <h2 class="saved-section-title">${escapeHtml(entry.name)}</h2>
+      <div class="meta">${escapeHtml(entry.dataStr)} · material: ${entry.docNames.length ? escapeHtml(entry.docNames.join(', ')) : '—'}</div>
+      ${body.bodyInner.replace(/^<h1>.*?<\/h1>\s*<div class="meta">.*?<\/div>/s, '')}
+    </div>`;
+  }).join('\n<hr style="margin:32px 0;border:none;border-top:2px solid #ccc;">\n');
+
+  const html = `<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Análises salvas — documento completo</title>
+<style>${ANALYSIS_DOC_STYLE}
+  .saved-section-title{font-size:20px;margin:0 0 4px;color:#22514a;}
+  .print-bar{position:sticky;top:0;display:flex;justify-content:flex-end;padding:10px 0 16px;background:#fff;}
+  .print-bar button{font-family:'Courier New',monospace;font-size:12px;letter-spacing:.05em;text-transform:uppercase;padding:8px 16px;border-radius:3px;border:1px solid #22514a;background:#22514a;color:#eee7d8;cursor:pointer;}
+  .print-bar button:hover{background:#2f7a6d;}
+  @media print{ .print-bar{ display:none !important; } }
+</style></head>
+<body>
+  <div class="print-bar"><button onclick="window.print()">🖨 imprimir / salvar em PDF</button></div>
+  <h1>Análises salvas</h1>
+  <div class="meta">Documento gerado em ${dataStr} · ${savedAnalyses.length} análise${savedAnalyses.length>1?'s':''}</div>
+  ${sections}
+</body></html>`;
+
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = now.toISOString().slice(0,10);
+  a.href = url;
+  a.download = `analises-salvas-${stamp}.html`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+document.getElementById('downloadAllSavedBtn').addEventListener('click', downloadAllSavedAnalyses);
+
+loadSavedAnalyses();
+renderSavedList();
 </script>
 </body>
 </html>
