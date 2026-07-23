@@ -1415,7 +1415,39 @@ const STUDY_SUMMARY_STYLE = `
   .deepen-label{font-family:'Courier New',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:#8a6a1e;margin-bottom:4px;}
   .deepen-src{font-family:'Courier New',monospace;font-size:11.5px;color:#555;margin-bottom:4px;}
   .deepen-text{font-size:13.5px;color:#444;}
-  @media print{ body{margin:0;padding:24px;} }
+
+  /* ---------- otimização de impressão (economia de papel) ---------- */
+  @media print{
+    @page{ margin: 10mm 12mm; }
+    body{
+      margin:0;
+      padding:0;
+      max-width:100%;
+      font-size:12px;
+      line-height:1.35;
+      color:#000;
+    }
+    h1{font-size:18px;margin:0 0 3px;}
+    .meta{font-size:10px;margin-bottom:14px;}
+    .item{
+      padding:10px 0;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .item-head{font-size:9.5px;margin-bottom:3px;}
+    .question{font-size:13px;margin-bottom:6px;}
+    .alts{margin-bottom:6px;}
+    .alt{padding:2px 0;font-size:11.5px;}
+    .alt.correct{padding-left:6px;}
+    .alt-comment{font-size:11px;margin-top:2px;}
+    .mode-note{font-size:10px;margin-bottom:5px;}
+    .deepen{padding:7px 10px;margin-top:5px;}
+    .deepen-label{font-size:9px;margin-bottom:2px;}
+    .deepen-src{font-size:10px;margin-bottom:2px;}
+    .deepen-text{font-size:11px;}
+    /* evita que sombras/backgrounds gastem tinta desnecessariamente */
+    .alt.correct{background:#f2debd33;}
+  }
 `;
 
 function buildStudySummaryBodyHtml(){
@@ -1487,8 +1519,30 @@ function buildStudySummaryFullHtml(){
   return `<!DOCTYPE html>
 <html lang="pt-BR"><head><meta charset="UTF-8">
 <title>Resumo de estudo</title>
-<style>${STUDY_SUMMARY_STYLE}</style></head>
+<style>${STUDY_SUMMARY_STYLE}
+  .print-bar{
+    position:sticky;top:0;
+    display:flex;justify-content:flex-end;
+    padding:10px 0 16px;
+    background:#fff;
+  }
+  .print-bar button{
+    font-family:'Courier New',monospace;
+    font-size:12px;
+    letter-spacing:.05em;
+    text-transform:uppercase;
+    padding:8px 16px;
+    border-radius:3px;
+    border:1px solid #22514a;
+    background:#22514a;
+    color:#eee7d8;
+    cursor:pointer;
+  }
+  .print-bar button:hover{background:#2f7a6d;}
+  @media print{ .print-bar{ display:none !important; } }
+</style></head>
 <body>
+  <div class="print-bar"><button onclick="window.print()">🖨 imprimir / salvar em PDF</button></div>
   ${data.bodyInner}
 </body></html>`;
 }
@@ -1516,6 +1570,13 @@ async function downloadStudySummaryPDF(){
 
   const data = buildStudySummaryBodyHtml();
   const container = document.createElement('div');
+  container.id = 'pdfRenderContainer';
+  // Nota: mantemos o container fora da tela por CSS, mas o html2canvas
+  // captura a partir de um clone do DOM (onclone abaixo), onde a posição
+  // é normalizada para (0,0). Isso evita o bug clássico do html2canvas
+  // que gera páginas em branco ao capturar elementos com
+  // position:fixed/absolute e offset negativo (-9999px), pois esses
+  // offsets ficam fora da área de captura calculada pela biblioteca.
   container.style.position = 'fixed';
   container.style.left = '-9999px';
   container.style.top = '0';
@@ -1531,7 +1592,23 @@ async function downloadStudySummaryPDF(){
       margin: 10,
       filename: `resumo-estudo-${stamp}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true },
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        windowWidth: 760,
+        onclone: (clonedDoc) => {
+          // Normaliza a posição do clone para dentro da área visível
+          // que o html2canvas realmente renderiza — corrige o PDF em branco.
+          const el = clonedDoc.getElementById('pdfRenderContainer');
+          if(el){
+            el.style.position = 'static';
+            el.style.left = '0';
+            el.style.top = '0';
+            el.style.width = '760px';
+          }
+        }
+      },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
       pagebreak: { mode: ['css', 'avoid-all'] }
     }).from(container).save();
