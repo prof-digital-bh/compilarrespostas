@@ -1618,18 +1618,28 @@ function buildStudySummaryBodyHtml(){
   }).join('\n');
 
   return {
-    dataStr, docNames,
-    bodyInner: `<h1>Resumo de estudo</h1>
-  <div class="meta">Gerado em ${dataStr}${disciplina ? ' · disciplina: ' + escapeHtml(disciplina) : ''} · material: ${docNames.length ? escapeHtml(docNames.join(', ')) : '—'}</div>
+    dataStr, docNames, disciplina,
+    bodyInner: `<h1>${disciplina ? escapeHtml(disciplina) : 'Resumo de estudo'}</h1>
+  <div class="meta">${disciplina ? 'Resumo de estudo · g' : 'G'}erado em ${dataStr} · material: ${docNames.length ? escapeHtml(docNames.join(', ')) : '—'}</div>
   ${itemsHtml}`
   };
 }
 
+function slugify(str){
+  return (str || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g,'-')
+    .replace(/^-+|-+$/g,'')
+    .slice(0, 60);
+}
+
 function buildStudySummaryFullHtml(){
   const data = buildStudySummaryBodyHtml();
+  const pageTitle = data.disciplina ? `Resumo de estudo — ${data.disciplina}` : 'Resumo de estudo';
   return `<!DOCTYPE html>
 <html lang="pt-BR"><head><meta charset="UTF-8">
-<title>Resumo de estudo</title>
+<title>${escapeHtml(pageTitle)}</title>
 <style>${STUDY_SUMMARY_STYLE}
   .print-bar{
     position:sticky;top:0;
@@ -1660,13 +1670,15 @@ function buildStudySummaryFullHtml(){
 
 function downloadStudySummaryHtmlFile(){
   if(!lastResults.length) return;
+  const data = buildStudySummaryBodyHtml();
   const html = buildStudySummaryFullHtml();
   const blob = new Blob([html], { type: 'text/html' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   const stamp = new Date().toISOString().slice(0,10);
+  const nameBase = data.disciplina ? `resumo-${slugify(data.disciplina)}` : 'resumo-estudo';
   a.href = url;
-  a.download = `resumo-estudo-${stamp}.html`;
+  a.download = `${nameBase}-${stamp}.html`;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -1680,45 +1692,39 @@ async function downloadStudySummaryPDF(){
   pdfProgress.textContent = 'gerando PDF…';
 
   const data = buildStudySummaryBodyHtml();
+
+  // Overlay cobrindo a tela inteira enquanto o PDF é gerado. Isso é o que
+  // garante uma captura correta: o conteúdo fica renderizado dentro da área
+  // visível da página (posição 0,0), em vez de "fora da tela" com um offset
+  // negativo — que é a causa raiz do PDF sair em branco (o html2canvas
+  // calcula a região a capturar a partir da posição real do elemento, e
+  // offsets negativos ficam fora dessa região). O overlay só esconde
+  // visualmente o conteúdo do usuário durante o instante da geração.
+  const overlay = document.createElement('div');
+  overlay.id = 'pdfOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:999999;background:#ffffff;display:flex;align-items:center;justify-content:center;font-family:\'Courier New\',monospace;font-size:13px;color:#333;';
+  overlay.textContent = 'gerando PDF…';
+  document.body.appendChild(overlay);
+
   const container = document.createElement('div');
   container.id = 'pdfRenderContainer';
-  // Nota: mantemos o container fora da tela por CSS, mas o html2canvas
-  // captura a partir de um clone do DOM (onclone abaixo), onde a posição
-  // é normalizada para (0,0). Isso evita o bug clássico do html2canvas
-  // que gera páginas em branco ao capturar elementos com
-  // position:fixed/absolute e offset negativo (-9999px), pois esses
-  // offsets ficam fora da área de captura calculada pela biblioteca.
-  container.style.position = 'fixed';
-  container.style.left = '-9999px';
-  container.style.top = '0';
-  container.style.width = '760px';
-  container.style.background = '#ffffff';
+  container.style.cssText = 'position:fixed;top:0;left:0;width:760px;background:#ffffff;z-index:999998;';
   container.innerHTML = `<style>${STUDY_SUMMARY_STYLE}</style><div style="margin:0;padding:24px;">${data.bodyInner}</div>`;
   document.body.appendChild(container);
 
   const stamp = new Date().toISOString().slice(0,10);
+  const nameBase = data.disciplina ? `resumo-${slugify(data.disciplina)}` : 'resumo-estudo';
 
   try{
     await html2pdf().set({
       margin: 10,
-      filename: `resumo-estudo-${stamp}.pdf`,
+      filename: `${nameBase}-${stamp}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
       html2canvas: {
         scale: 2,
         useCORS: true,
         backgroundColor: '#ffffff',
-        windowWidth: 760,
-        onclone: (clonedDoc) => {
-          // Normaliza a posição do clone para dentro da área visível
-          // que o html2canvas realmente renderiza — corrige o PDF em branco.
-          const el = clonedDoc.getElementById('pdfRenderContainer');
-          if(el){
-            el.style.position = 'static';
-            el.style.left = '0';
-            el.style.top = '0';
-            el.style.width = '760px';
-          }
-        }
+        windowWidth: 760
       },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
       pagebreak: { mode: ['css', 'avoid-all'] }
@@ -1729,6 +1735,7 @@ async function downloadStudySummaryPDF(){
     setTimeout(()=> pdfProgress.textContent = '', 5000);
   }finally{
     container.remove();
+    overlay.remove();
     summaryBtn.disabled = false;
     if(pdfProgress.textContent === 'gerando PDF…') pdfProgress.textContent = '';
   }
