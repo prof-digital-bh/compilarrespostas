@@ -508,6 +508,7 @@
       <input type="file" id="fileInput" accept="application/pdf" multiple>
     </div>
     <div id="docList"></div>
+    <div class="hint">PDFs, questões e resultados ficam salvos automaticamente neste navegador (localStorage) — se você atualizar a página, tudo continua aqui. Remova um PDF pelo ✕ ao lado dele; "Limpar tudo" apaga questões e resultados salvos.</div>
   </section>
 
   <section class="card" data-label="02 — Questões">
@@ -606,6 +607,7 @@ function handleFiles(fileList){
     const docEntry = { name: file.name, paragraphs: [], status: 'lendo' };
     documents.push(docEntry);
     renderDocList();
+    saveState();
     extractPdf(file, docEntry);
   });
 }
@@ -623,6 +625,7 @@ function renderDocList(){
     chip.querySelector('button').addEventListener('click', () => {
       documents.splice(i,1);
       renderDocList();
+      saveState();
     });
     docListEl.appendChild(chip);
   });
@@ -669,6 +672,7 @@ async function extractPdf(file, docEntry){
     docEntry.status = 'erro';
   }
   renderDocList();
+  saveState();
 }
 
 // ---------- normalização e similaridade ----------
@@ -763,6 +767,82 @@ function escapeHtml(s){
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+// ---------- persistência automática (localStorage) ----------
+// Guarda documentos, questões digitadas e resultados para sobreviverem a um
+// F5 / atualização de página. Tudo fica só no navegador do usuário — nada é
+// enviado para nenhum servidor. Dentro do artefato do Claude.ai o localStorage
+// pode não estar disponível; nesse caso os try/catch abaixo simplesmente
+// deixam a persistência desativada, sem quebrar o app.
+const STATE_KEY = 'achador_state_v1';
+let stateRestoring = false; // evita salvar por cima do que está sendo restaurado
+
+function debounce(fn, ms){
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
+function saveState(){
+  if(stateRestoring) return;
+  const values = collectFormValues();
+  const state = {
+    documents: documents.map(d => ({ name: d.name, paragraphs: d.paragraphs, status: d.status })),
+    questionModel,
+    qCounter,
+    formValues: values,
+    lastResults
+  };
+  try{
+    window.localStorage.setItem(STATE_KEY, JSON.stringify(state));
+  }catch(e){
+    // provavelmente estourou a cota do localStorage (PDFs grandes deixam o
+    // texto extraído pesado). Tenta salvar uma versão mais enxuta, sem o
+    // conteúdo dos PDFs, para ao menos manter questões e resultados.
+    try{
+      const lightState = {
+        ...state,
+        documents: documents.map(d => ({ name: d.name, paragraphs: [], status: 'reenvie este PDF após atualizar a página' }))
+      };
+      window.localStorage.setItem(STATE_KEY, JSON.stringify(lightState));
+    }catch(e2){ /* localStorage indisponível — segue sem persistir */ }
+  }
+}
+
+function loadState(){
+  let raw;
+  try{ raw = window.localStorage.getItem(STATE_KEY); }catch(e){ return; }
+  if(!raw) return;
+  let state;
+  try{ state = JSON.parse(raw); }catch(e){ return; }
+  if(!state) return;
+
+  stateRestoring = true;
+  try{
+    if(Array.isArray(state.documents) && state.documents.length){
+      documents = state.documents.map(d => ({ name: d.name, paragraphs: d.paragraphs || [], status: d.status || '' }));
+      renderDocList();
+    }
+    if(Array.isArray(state.questionModel) && state.questionModel.length){
+      questionModel = state.questionModel.map(q => ({ id: q.id, altIds: q.altIds }));
+      qCounter = state.qCounter || questionModel.length;
+      pendingOverride = {
+        questions: (state.formValues && state.formValues.questions) || {},
+        alts: (state.formValues && state.formValues.alts) || {}
+      };
+      renderQForm();
+    }
+    if(Array.isArray(state.lastResults) && state.lastResults.length){
+      lastResults = state.lastResults;
+      resultsCard.style.display = 'block';
+      resultsEl.innerHTML = '';
+      lastResults.forEach(entry => resultsEl.appendChild(renderResultBlock(entry)));
+      summaryRow.style.display = 'flex';
+    }
+  }catch(e){
+    console.error('Falha ao restaurar estado salvo:', e);
+  }
+  stateRestoring = false;
+}
+
 // ---------- formulário de questões + alternativas ----------
 const LETTERS = ['A','B','C','D','E','F'];
 let qCounter = 0;
@@ -813,6 +893,7 @@ function clearQuestion(id){
     resultsEl.innerHTML = '';
     summaryRow.style.display = 'none';
   }
+  saveState();
 }
 function addAlt(qId){
   const q = questionModel.find(q => q.id === qId);
@@ -966,6 +1047,7 @@ function renderQForm(){
 
     container.appendChild(card);
   });
+  saveState();
 }
 
 function collectFormValues(){
@@ -983,7 +1065,15 @@ function collectFormValues(){
 }
 
 document.getElementById('addQBtn').addEventListener('click', newQuestion);
-newQuestion(); // começa com uma questão em branco
+
+// salva o que o usuário está digitando (enunciado/alternativas), com debounce
+// pra não gravar no localStorage a cada tecla
+document.getElementById('qform').addEventListener('input', debounce(saveState, 500));
+
+loadState(); // tenta restaurar documentos, questões e resultados de uma sessão anterior
+if(questionModel.length === 0){
+  newQuestion(); // começa com uma questão em branco, caso não haja nada salvo
+}
 
 // ---------- análise de alternativas ----------
 const NEGATION_MARKERS = ['incorret', 'falsa', 'falso', 'exceto', 'nao e correto', 'não é correto', 'errad', 'nao verdadeir', 'inadequad'];
@@ -1167,6 +1257,8 @@ document.getElementById('clearBtn').addEventListener('click', () => {
   summaryRow.style.display = 'none';
   document.getElementById('disciplinaSelect').value = '';
   try{ window.localStorage.removeItem('achador_disciplina'); }catch(e){ /* ignora */ }
+  try{ window.localStorage.removeItem(STATE_KEY); }catch(e){ /* ignora */ }
+  saveState();
 });
 
 function buildAltResultsHtml(question, opts){
@@ -1196,6 +1288,65 @@ function buildAltResultsHtml(question, opts){
     `;
     return div;
   });
+}
+
+// constrói o bloco de resultado de uma questão a partir de um "entry" no
+// formato salvo em lastResults — usado tanto ao analisar quanto ao restaurar
+// resultados de uma sessão anterior (localStorage) após atualizar a página.
+function renderResultBlock(entry){
+  const block = document.createElement('div');
+  block.className = 'qblock';
+  block.dataset.qid = entry.qId;
+
+  const title = document.createElement('div');
+  title.className = 'qtitle';
+  const tag = entry.mode === 'ai'
+    ? '<span class="mode-tag ai">IA</span>'
+    : '<span class="mode-tag fallback">aproximado</span>';
+  title.innerHTML = `<span class="qn">Q${entry.index}</span> ${escapeHtml(entry.question)} ${tag}`;
+  block.appendChild(title);
+
+  const verdict = document.createElement('div');
+  verdict.className = 'verdict';
+  if(entry.apiError){
+    verdict.textContent = '⚠ não foi possível consultar a IA agora (verifique se este arquivo está aberto aqui no Claude) — usando modo de aproximação por palavras como alternativa.';
+  } else if(entry.mode === 'ai'){
+    verdict.textContent = entry.foundInText === false
+      ? '⚠ a IA não encontrou base suficiente no material — resposta é um palpite, confira manualmente.'
+      : (entry.negative ? '⚠ enunciado pede a alternativa incorreta/falsa — a IA considerou isso ao decidir.' : 'resposta decidida pelo Claude com base no material enviado.');
+  } else {
+    verdict.textContent = entry.negative
+      ? '⚠ marcador negativo detectado — apontando a alternativa MENOS sustentada pelo texto (modo aproximado)'
+      : 'apontando a alternativa mais sustentada por palavras do texto (modo aproximado)';
+  }
+  block.appendChild(verdict);
+
+  if(entry.externalSource){
+    const extDiv = document.createElement('div');
+    extDiv.className = 'evidence';
+    extDiv.innerHTML = `<span class="src">🌐 fonte externa consultada pela IA${entry.externalSource.url ? ' · ' + escapeHtml(entry.externalSource.url) : ''}</span>${escapeHtml(entry.externalSource.descricao || '')}`;
+    block.appendChild(extDiv);
+  }
+
+  buildAltResultsHtml({ alts: entry.alts }, {
+    mode: entry.mode,
+    chosenLetter: entry.chosenLetter,
+    pctByLetter: entry.pctByLetter || {},
+    justification: entry.justification,
+    evidenceHtml: entry.evidenceHtml || '',
+    foundInText: entry.foundInText
+  }).forEach(div => block.appendChild(div));
+
+  const clearRow = document.createElement('div');
+  clearRow.className = 'result-clear-row';
+  const clearBtn = document.createElement('button');
+  clearBtn.className = 'btn ghost small';
+  clearBtn.textContent = '🗑 apagar esta questão e inserir outra';
+  clearBtn.addEventListener('click', () => clearQuestion(entry.qId));
+  clearRow.appendChild(clearBtn);
+  block.appendChild(clearRow);
+
+  return block;
 }
 
 function runFallbackForQuestion(question, allParagraphs){
@@ -1335,56 +1486,16 @@ async function runAnalysis(){
       evidenceSource: result.evidenceSource || null,
       evidenceText: result.evidenceText || '',
       externalSource: result.externalSource || null,
+      // guardados para conseguir remontar o bloco de resultado (barras de %
+      // e trecho destacado) ao restaurar a sessão depois de um F5
+      pctByLetter: result.pctByLetter || {},
+      evidenceHtml: result.evidenceHtml || '',
       disciplina
     });
 
-    const block = document.createElement('div');
-    block.className = 'qblock';
-    block.dataset.qid = q.id;
-
-    const title = document.createElement('div');
-    title.className = 'qtitle';
-    const tag = result.mode === 'ai'
-      ? '<span class="mode-tag ai">IA</span>'
-      : '<span class="mode-tag fallback">aproximado</span>';
-    title.innerHTML = `<span class="qn">Q${idx+1}</span> ${escapeHtml(q.text)} ${tag}`;
-    block.appendChild(title);
-
-    const verdict = document.createElement('div');
-    verdict.className = 'verdict';
-    if(result.apiError){
-      verdict.textContent = '⚠ não foi possível consultar a IA agora (verifique se este arquivo está aberto aqui no Claude) — usando modo de aproximação por palavras como alternativa.';
-    } else if(result.mode === 'ai'){
-      verdict.textContent = result.foundInText === false
-        ? '⚠ a IA não encontrou base suficiente no material — resposta é um palpite, confira manualmente.'
-        : (negative ? '⚠ enunciado pede a alternativa incorreta/falsa — a IA considerou isso ao decidir.' : 'resposta decidida pelo Claude com base no material enviado.');
-    } else {
-      verdict.textContent = negative
-        ? '⚠ marcador negativo detectado — apontando a alternativa MENOS sustentada pelo texto (modo aproximado)'
-        : 'apontando a alternativa mais sustentada por palavras do texto (modo aproximado)';
-    }
-    block.appendChild(verdict);
-
-    if(result.externalSource){
-      const extDiv = document.createElement('div');
-      extDiv.className = 'evidence';
-      extDiv.innerHTML = `<span class="src">🌐 fonte externa consultada pela IA${result.externalSource.url ? ' · ' + escapeHtml(result.externalSource.url) : ''}</span>${escapeHtml(result.externalSource.descricao || '')}`;
-      block.appendChild(extDiv);
-    }
-
-    buildAltResultsHtml(q, result).forEach(div => block.appendChild(div));
-
-    const clearRow = document.createElement('div');
-    clearRow.className = 'result-clear-row';
-    const clearBtn = document.createElement('button');
-    clearBtn.className = 'btn ghost small';
-    clearBtn.textContent = '🗑 apagar esta questão e inserir outra';
-    clearBtn.addEventListener('click', () => clearQuestion(q.id));
-    clearRow.appendChild(clearBtn);
-    block.appendChild(clearRow);
-
-    resultsEl.appendChild(block);
+    resultsEl.appendChild(renderResultBlock(lastResults[lastResults.length - 1]));
     resultsCard.scrollIntoView({behavior:'smooth', block:'nearest'});
+    saveState(); // salva o progresso a cada questão, caso o usuário feche a aba no meio da análise
   }
 
   progressEl.textContent = '';
