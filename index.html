@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Achador — busca de respostas em PDFs</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>
   :root{
     --paper: #eee7d8;
@@ -496,6 +495,7 @@
 <header>
   <div class="tab">ferramenta de estudo</div>
   <h1>Achador de respostas</h1>
+  <p>Curso: Metodologia do Ensino de Geografia</p>
   <p>Suba os PDFs do curso, digite a questão com suas alternativas e o sistema indica, por aproximação de palavras, qual alternativa é mais sustentada pelo texto.</p>
 </header>
 
@@ -515,18 +515,14 @@
     <div class="row" style="margin-bottom:6px;">
       <select id="disciplinaSelect" style="flex:1;min-width:240px;">
         <option value="">Selecione a disciplina…</option>
-        <option>Sala de Recursos Multifuncionais</option>
-        <option>As Novas Tecnologias da Informação e Comunicação</option>
-        <option>Aspectos Éticos e Socioeconomicos: Novas Tecnologias na Educação</option>
+        <option>Conhecimento Geográfico</option>
         <option>Didática e Metodologia do Ensino Superior</option>
-        <option>Educação a Distância - Metodos e Tecnologias</option>
         <option>Ética na Educação</option>
-        <option>Informática - Conceitos Básicos</option>
-        <option>Informática e o Processo de Ensino Aprendizagem</option>
-        <option>Internet, Redes Sociais e Comunicação Interpessoal</option>
+        <option>Introdução à Geografia</option>
         <option>Libras</option>
         <option>Metodologia da Pesquisa e Produção Científica</option>
-        <option>O Trabalho Docente Diante das Novas TICs</option>
+        <option>Métodos e Técnicas para o Ensino de Geografia</option>
+        <option>Noções Básicas de Cartografia, Geomorfologia e Biogeografia</option>
         <option>Relacionamento Interpessoal e Marketing Pessoal</option>
         <option>TCC - Trabalho de Conclusão de Curso</option>
       </select>
@@ -566,10 +562,9 @@
   <section class="card" data-label="03 — Resultados" id="resultsCard" style="display:none;">
     <div id="results"></div>
     <div class="row" id="summaryRow" style="display:none;margin-top:6px;border-top:1px solid var(--line);padding-top:16px;">
-      <button class="btn" id="summaryBtn">📄 Baixar PDF</button>
-      <button class="btn ghost" id="summaryHtmlBtn">Baixar como HTML</button>
-      <span class="progress" id="pdfProgress"></span>
-      <span class="hint" style="margin-top:0;">Baixa um documento com enunciados, resposta correta, justificativa e indicação de onde aprofundar (documento/página).</span>
+      <button class="btn" id="analysisDocBtn">📚 Gerar documento de análise</button>
+      <span class="progress" id="docProgress"></span>
+      <span class="hint" style="margin-top:0;">Gera um documento (HTML, pronto para imprimir/salvar como PDF pelo navegador) com o enunciado, a resposta, um comentário curto e uma dica bibliográfica para cada questão.</span>
     </div>
   </section>
 </main>
@@ -588,7 +583,7 @@ const progressEl = document.getElementById('progress');
 const resultsCard = document.getElementById('resultsCard');
 const resultsEl = document.getElementById('results');
 const summaryRow = document.getElementById('summaryRow');
-const summaryBtn = document.getElementById('summaryBtn');
+const analysisDocBtn = document.getElementById('analysisDocBtn');
 let lastResults = []; // guarda os dados de cada questão analisada, para gerar o resumo de estudo
 
 dropEl.addEventListener('click', () => fileInput.click());
@@ -1505,8 +1500,8 @@ async function runAnalysis(){
   }
 }
 
-// ---------- resumo de estudo (documento para baixar) ----------
-const STUDY_SUMMARY_STYLE = `
+// ---------- documento de análise (documento para baixar) ----------
+const ANALYSIS_DOC_STYLE = `
   body{font-family:Georgia,'Iowan Old Style',serif;max-width:760px;margin:40px auto;padding:0 24px;color:#1e2a24;line-height:1.6;}
   h1{font-size:24px;margin-bottom:4px;}
   .meta{font-family:'Courier New',monospace;font-size:12px;color:#555;margin-bottom:28px;}
@@ -1514,18 +1509,14 @@ const STUDY_SUMMARY_STYLE = `
   .item:first-of-type{border-top:none;}
   .item-head{font-family:'Courier New',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#2f7a6d;margin-bottom:6px;}
   .question{font-weight:700;font-size:16px;margin-bottom:10px;}
-  .alts{margin-bottom:10px;}
-  .alt{padding:4px 0;font-size:14px;}
-  .alt.correct{background:#f2debd66;border-left:3px solid #2f7a6d;padding-left:8px;font-weight:600;}
-  .alt-comment{font-weight:400;font-style:italic;font-size:13px;color:#4a5850;margin-top:3px;}
-  .tag{font-family:'Courier New',monospace;font-size:11px;color:#2f7a6d;}
-  .answer{font-size:14.5px;margin:8px 0;}
-  .justification{font-size:14px;color:#333;margin-bottom:8px;}
+  .answer{font-size:14.5px;margin-bottom:8px;padding:6px 10px;background:#f2debd66;border-left:3px solid #2f7a6d;}
+  .answer .tag{font-family:'Courier New',monospace;font-size:11px;color:#2f7a6d;margin-left:6px;}
+  .comment{font-size:14px;color:#333;margin-bottom:10px;}
   .mode-note{font-family:'Courier New',monospace;font-size:11.5px;color:#a4432e;margin-bottom:8px;}
-  .deepen{background:#f7f3e8;border-left:3px solid #d8a53e;padding:10px 14px;margin-top:8px;}
-  .deepen-label{font-family:'Courier New',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:#8a6a1e;margin-bottom:4px;}
-  .deepen-src{font-family:'Courier New',monospace;font-size:11.5px;color:#555;margin-bottom:4px;}
-  .deepen-text{font-size:13.5px;color:#444;}
+  .biblio{background:#f7f3e8;border-left:3px solid #d8a53e;padding:10px 14px;margin-top:8px;}
+  .biblio-label{font-family:'Courier New',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:#8a6a1e;margin-bottom:4px;}
+  .biblio-src{font-family:'Courier New',monospace;font-size:11.5px;color:#555;margin-bottom:4px;}
+  .biblio-text{font-size:13.5px;color:#444;}
 
   /* ---------- otimização de impressão (economia de papel) ---------- */
   @media print{
@@ -1547,37 +1538,24 @@ const STUDY_SUMMARY_STYLE = `
     }
     .item-head{font-size:9.5px;margin-bottom:3px;}
     .question{font-size:13px;margin-bottom:6px;}
-    .alts{margin-bottom:6px;}
-    .alt{padding:2px 0;font-size:11.5px;}
-    .alt.correct{padding-left:6px;}
-    .alt-comment{font-size:11px;margin-top:2px;}
+    .answer{font-size:12px;padding:4px 8px;margin-bottom:6px;}
+    .comment{font-size:11.5px;margin-bottom:6px;}
     .mode-note{font-size:10px;margin-bottom:5px;}
-    .deepen{padding:7px 10px;margin-top:5px;}
-    .deepen-label{font-size:9px;margin-bottom:2px;}
-    .deepen-src{font-size:10px;margin-bottom:2px;}
-    .deepen-text{font-size:11px;}
-    /* evita que sombras/backgrounds gastem tinta desnecessariamente */
-    .alt.correct{background:#f2debd33;}
+    .biblio{padding:7px 10px;margin-top:5px;background:#f7f3e866;}
+    .biblio-label{font-size:9px;margin-bottom:2px;}
+    .biblio-src{font-size:10px;margin-bottom:2px;}
+    .biblio-text{font-size:11px;}
   }
 `;
 
-function buildStudySummaryBodyHtml(){
+function buildAnalysisDocBodyHtml(){
   const now = new Date();
   const dataStr = now.toLocaleDateString('pt-BR') + ' ' + now.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
   const docNames = documents.map(d => d.name);
   const disciplina = (lastResults[0] && lastResults[0].disciplina) || document.getElementById('disciplinaSelect').value || '';
 
   const itemsHtml = lastResults.map(r => {
-    const altsHtml = r.alts.map(a => {
-      const isCorrect = a.letter === r.chosenLetter;
-      const comment = isCorrect && r.justification
-        ? `<div class="alt-comment">${escapeHtml(r.justification)}</div>`
-        : '';
-      return `<div class="alt${isCorrect ? ' correct' : ''}">
-        <strong>${escapeHtml(a.letter)})</strong> ${escapeHtml(a.text)}${isCorrect ? ' <span class="tag">✓ correta</span>' : ''}
-        ${comment}
-      </div>`;
-    }).join('');
+    const chosenAlt = r.alts.find(a => a.letter === r.chosenLetter);
 
     let modeNote = '';
     if(r.apiError){
@@ -1591,36 +1569,45 @@ function buildStudySummaryBodyHtml(){
       modeNote += (modeNote ? ' ' : '') + 'Enunciado pede a alternativa incorreta/falsa/exceto.';
     }
 
-    const aprofundamento = r.evidenceSource
-      ? `<div class="deepen">
-          <div class="deepen-label">Para aprofundar</div>
-          <div class="deepen-src">${escapeHtml(r.evidenceSource.docName)} — página ${escapeHtml(String(r.evidenceSource.page))}</div>
-          <div class="deepen-text">${escapeHtml(r.evidenceText)}</div>
+    const respostaHtml = chosenAlt
+      ? `<div class="answer"><strong>Resposta: ${escapeHtml(chosenAlt.letter)})</strong> ${escapeHtml(chosenAlt.text)}<span class="tag">✓</span></div>`
+      : `<div class="answer">Resposta não identificada — confira manualmente.</div>`;
+
+    const comentarioHtml = r.justification
+      ? `<div class="comment">${escapeHtml(r.justification)}</div>`
+      : '';
+
+    const bibliografia = r.evidenceSource
+      ? `<div class="biblio">
+          <div class="biblio-label">📚 Dica bibliográfica</div>
+          <div class="biblio-src">${escapeHtml(r.evidenceSource.docName)} — página ${escapeHtml(String(r.evidenceSource.page))}</div>
+          <div class="biblio-text">${escapeHtml(r.evidenceText)}</div>
         </div>`
-      : `<div class="deepen"><div class="deepen-label">Para aprofundar</div><div class="deepen-text">Nenhum trecho específico localizado — revise o material completo sobre este tema.</div></div>`;
+      : `<div class="biblio"><div class="biblio-label">📚 Dica bibliográfica</div><div class="biblio-text">Nenhum trecho específico localizado — revise o material completo sobre este tema.</div></div>`;
 
     const fonteExterna = r.externalSource
-      ? `<div class="deepen" style="border-left-color:#2f7a6d;background:#eef5f2;">
-          <div class="deepen-label" style="color:#22514a;">🌐 Fonte externa consultada pela IA</div>
-          ${r.externalSource.url ? `<div class="deepen-src">${escapeHtml(r.externalSource.url)}</div>` : ''}
-          <div class="deepen-text">${escapeHtml(r.externalSource.descricao || '')}</div>
+      ? `<div class="biblio" style="border-left-color:#2f7a6d;background:#eef5f2;">
+          <div class="biblio-label" style="color:#22514a;">🌐 Fonte externa consultada pela IA</div>
+          ${r.externalSource.url ? `<div class="biblio-src">${escapeHtml(r.externalSource.url)}</div>` : ''}
+          <div class="biblio-text">${escapeHtml(r.externalSource.descricao || '')}</div>
         </div>`
       : '';
 
     return `<div class="item">
       <div class="item-head">Questão ${r.index}</div>
       <div class="question">${escapeHtml(r.question)}</div>
-      <div class="alts">${altsHtml}</div>
+      ${respostaHtml}
       ${modeNote ? `<div class="mode-note">${escapeHtml(modeNote)}</div>` : ''}
-      ${aprofundamento}
+      ${comentarioHtml}
+      ${bibliografia}
       ${fonteExterna}
     </div>`;
   }).join('\n');
 
   return {
     dataStr, docNames, disciplina,
-    bodyInner: `<h1>${disciplina ? escapeHtml(disciplina) : 'Resumo de estudo'}</h1>
-  <div class="meta">${disciplina ? 'Resumo de estudo · g' : 'G'}erado em ${dataStr} · material: ${docNames.length ? escapeHtml(docNames.join(', ')) : '—'}</div>
+    bodyInner: `<h1>${disciplina ? escapeHtml(disciplina) : 'Documento de análise'}</h1>
+  <div class="meta">${disciplina ? 'Documento de análise · g' : 'G'}erado em ${dataStr} · material: ${docNames.length ? escapeHtml(docNames.join(', ')) : '—'}</div>
   ${itemsHtml}`
   };
 }
@@ -1634,13 +1621,13 @@ function slugify(str){
     .slice(0, 60);
 }
 
-function buildStudySummaryFullHtml(){
-  const data = buildStudySummaryBodyHtml();
-  const pageTitle = data.disciplina ? `Resumo de estudo — ${data.disciplina}` : 'Resumo de estudo';
+function buildAnalysisDocFullHtml(){
+  const data = buildAnalysisDocBodyHtml();
+  const pageTitle = data.disciplina ? `Documento de análise — ${data.disciplina}` : 'Documento de análise';
   return `<!DOCTYPE html>
 <html lang="pt-BR"><head><meta charset="UTF-8">
 <title>${escapeHtml(pageTitle)}</title>
-<style>${STUDY_SUMMARY_STYLE}
+<style>${ANALYSIS_DOC_STYLE}
   .print-bar{
     position:sticky;top:0;
     display:flex;justify-content:flex-end;
@@ -1668,81 +1655,27 @@ function buildStudySummaryFullHtml(){
 </body></html>`;
 }
 
-function downloadStudySummaryHtmlFile(){
+function downloadAnalysisDocument(){
   if(!lastResults.length) return;
-  const data = buildStudySummaryBodyHtml();
-  const html = buildStudySummaryFullHtml();
+  const data = buildAnalysisDocBodyHtml();
+  const html = buildAnalysisDocFullHtml();
   const blob = new Blob([html], { type: 'text/html' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   const stamp = new Date().toISOString().slice(0,10);
-  const nameBase = data.disciplina ? `resumo-${slugify(data.disciplina)}` : 'resumo-estudo';
+  const nameBase = data.disciplina ? `documento-analise-${slugify(data.disciplina)}` : 'documento-analise';
   a.href = url;
   a.download = `${nameBase}-${stamp}.html`;
   document.body.appendChild(a);
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+  const docProgress = document.getElementById('docProgress');
+  docProgress.textContent = 'documento gerado ✓ (abra e use "imprimir" pra salvar como PDF, se quiser)';
+  setTimeout(()=> docProgress.textContent = '', 6000);
 }
 
-async function downloadStudySummaryPDF(){
-  if(!lastResults.length) return;
-  const pdfProgress = document.getElementById('pdfProgress');
-  summaryBtn.disabled = true;
-  pdfProgress.textContent = 'gerando PDF…';
-
-  const data = buildStudySummaryBodyHtml();
-
-  // Overlay cobrindo a tela inteira enquanto o PDF é gerado. Isso é o que
-  // garante uma captura correta: o conteúdo fica renderizado dentro da área
-  // visível da página (posição 0,0), em vez de "fora da tela" com um offset
-  // negativo — que é a causa raiz do PDF sair em branco (o html2canvas
-  // calcula a região a capturar a partir da posição real do elemento, e
-  // offsets negativos ficam fora dessa região). O overlay só esconde
-  // visualmente o conteúdo do usuário durante o instante da geração.
-  const overlay = document.createElement('div');
-  overlay.id = 'pdfOverlay';
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:999999;background:#ffffff;display:flex;align-items:center;justify-content:center;font-family:\'Courier New\',monospace;font-size:13px;color:#333;';
-  overlay.textContent = 'gerando PDF…';
-  document.body.appendChild(overlay);
-
-  const container = document.createElement('div');
-  container.id = 'pdfRenderContainer';
-  container.style.cssText = 'position:fixed;top:0;left:0;width:760px;background:#ffffff;z-index:999998;';
-  container.innerHTML = `<style>${STUDY_SUMMARY_STYLE}</style><div style="margin:0;padding:24px;">${data.bodyInner}</div>`;
-  document.body.appendChild(container);
-
-  const stamp = new Date().toISOString().slice(0,10);
-  const nameBase = data.disciplina ? `resumo-${slugify(data.disciplina)}` : 'resumo-estudo';
-
-  try{
-    await html2pdf().set({
-      margin: 10,
-      filename: `${nameBase}-${stamp}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        windowWidth: 760
-      },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-      pagebreak: { mode: ['css', 'avoid-all'] }
-    }).from(container).save();
-  }catch(err){
-    console.error('Falha ao gerar PDF:', err);
-    pdfProgress.textContent = 'erro ao gerar PDF — tente "Baixar como HTML" e imprima em PDF pelo navegador.';
-    setTimeout(()=> pdfProgress.textContent = '', 5000);
-  }finally{
-    container.remove();
-    overlay.remove();
-    summaryBtn.disabled = false;
-    if(pdfProgress.textContent === 'gerando PDF…') pdfProgress.textContent = '';
-  }
-}
-
-summaryBtn.addEventListener('click', downloadStudySummaryPDF);
-document.getElementById('summaryHtmlBtn').addEventListener('click', downloadStudySummaryHtmlFile);
+analysisDocBtn.addEventListener('click', downloadAnalysisDocument);
 </script>
 </body>
 </html>
