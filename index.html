@@ -522,6 +522,15 @@
   }
   .step.done .num{background:var(--teal-bright);border-color:var(--teal-bright);color:var(--paper);}
   .step.done{color:var(--teal);}
+  .step{cursor:pointer;user-select:none;transition:background .15s,border-color .15s,color .15s;}
+  .step:hover{background:rgba(255,255,255,0.65);}
+  .step.active{background:var(--teal);border-color:var(--teal);color:var(--paper);}
+  .step.active .num{background:var(--paper);border-color:var(--paper);color:var(--teal);}
+  .step.active.done .num{background:var(--paper);border-color:var(--paper);color:var(--teal-bright);}
+
+  /* ---------- painéis das abas ---------- */
+  .tab-panel{display:none;}
+  .tab-panel.active{display:block;}
 
   /* ---------- barra de resumo dos resultados ---------- */
   .results-stats{
@@ -692,13 +701,13 @@
 </header>
 
 <div class="steps" id="stepsNav">
-  <div class="step" id="step1"><span class="num">1</span> Documentos</div>
-  <div class="step" id="step2"><span class="num">2</span> Questões</div>
-  <div class="step" id="step3"><span class="num">3</span> Resultados</div>
-  <div class="step" id="step4"><span class="num">4</span> Análises salvas</div>
+  <div class="step active" id="step1" data-tab="tabPanel1"><span class="num">1</span> Documentos, Questões e Resultados</div>
+  <div class="step" id="step4" data-tab="tabPanel2"><span class="num">2</span> Análises salvas</div>
+  <div class="step" id="step5" data-tab="tabPanel3"><span class="num">3</span> Exportar / Importar dados</div>
 </div>
 
 <main>
+  <div class="tab-panel active" id="tabPanel1">
   <section class="card" data-label="01 — Documentos">
     <div class="drop" id="drop">
       <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#22514a" stroke-width="1.6"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
@@ -774,7 +783,9 @@
       <span class="hint" style="margin-top:0;">"Salvar" guarda esta análise numa lista (abaixo) para reabrir ou baixar depois. "Gerar documento" cria um HTML pronto para imprimir/salvar como PDF, com enunciado, resposta, comentário e dica bibliográfica de cada questão. "Guardar no Drive" abre a pasta do curso no Google Drive, para você subir o documento baixado.</span>
     </div>
   </section>
+  </div>
 
+  <div class="tab-panel" id="tabPanel2">
   <section class="card" data-label="04 — Análises salvas" id="savedCard">
     <div id="savedList"></div>
     <div class="saved-empty" id="savedEmpty">Nenhuma análise salva ainda. Analise as questões acima e clique em "💾 Salvar esta análise" para guardá-la aqui — fica disponível neste navegador mesmo depois de fechar a aba.</div>
@@ -782,7 +793,12 @@
       <button class="btn ghost small" id="downloadAllSavedBtn">📦 Baixar todas em um só documento</button>
       <span class="hint" style="margin-top:0;">Junta todas as análises salvas num único arquivo HTML (imprimível/PDF), organizadas por nome e data.</span>
     </div>
-    <div class="row" id="backupRow" style="margin-top:14px;border-top:1px solid var(--line);padding-top:14px;">
+  </section>
+  </div>
+
+  <div class="tab-panel" id="tabPanel3">
+  <section class="card" data-label="05 — Exportar / importar dados">
+    <div class="row" id="backupRow" style="margin-top:0;">
       <button class="btn ghost small" id="exportBackupBtn">⬇ Exportar dados (arquivo compactado)</button>
       <button class="btn ghost small" id="importBackupBtn">⬆ Importar dados de um arquivo</button>
       <input type="file" id="importBackupInput" accept=".achador,.txt,.json" style="display:none;">
@@ -791,6 +807,7 @@
       <span class="hint" style="margin-top:0;">Gera um arquivo pequeno e compactado com cursos, disciplinas, PDFs enviados, questões e todas as análises salvas deste navegador. Leve o arquivo para outro computador (e-mail, pendrive, Drive etc.) e use "Importar" lá para trazer tudo de volta. Isso substitui os dados atuais daquele navegador. Por segurança, sua chave de API (se você usa uma própria) não entra no arquivo — baixe-a à parte, lá em cima, em "Opções da IA". Dica: crie uma subpasta própria dentro da pasta do Drive (botão ao lado) para guardar backups e a chave separados dos documentos de análise.</span>
     </div>
   </section>
+  </div>
 </main>
 
 <div class="modal-overlay" id="downloadFilterOverlay">
@@ -1041,20 +1058,26 @@ function escapeHtml(s){
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-// ---------- navegação de passos (indicador visual do progresso no fluxo) ----------
+// ---------- abas (Documentos/Questões/Resultados · Análises salvas · Exportar/Importar) ----------
+const tabButtons = document.querySelectorAll('#stepsNav .step[data-tab]');
+function activateTab(tabId){
+  tabButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tabId));
+  document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.toggle('active', panel.id === tabId));
+}
+tabButtons.forEach(btn => btn.addEventListener('click', () => activateTab(btn.dataset.tab)));
+
+// ---------- indicador visual de progresso nas abas ----------
 function updateStepsNav(){
   const s1 = document.getElementById('step1');
-  const s2 = document.getElementById('step2');
-  const s3 = document.getElementById('step3');
   const s4 = document.getElementById('step4');
   if(!s1) return;
-  s1.classList.toggle('done', documents.some(d => d.paragraphs && d.paragraphs.length));
+  const hasDocs = documents.some(d => d.paragraphs && d.paragraphs.length);
   const hasQuestion = questionModel.some(q => {
     const el = document.querySelector(`.qcard[data-qid="${q.id}"] [data-role="question"]`);
     return el && el.value.trim();
   });
-  s2.classList.toggle('done', hasQuestion);
-  s3.classList.toggle('done', lastResults.length > 0);
+  const hasResults = lastResults.length > 0;
+  s1.classList.toggle('done', hasDocs || hasQuestion || hasResults);
   s4.classList.toggle('done', savedAnalyses.length > 0);
 }
 
@@ -2408,10 +2431,13 @@ function saveCurrentAnalysis(){
   renderSavedList();
   const docProgress = document.getElementById('docProgress');
   docProgress.textContent = ok
-    ? 'análise salva ✓ — veja na seção "04 — Análises salvas", abaixo'
+    ? 'análise salva ✓ — veja na aba "Análises salvas"'
     : '⚠ não deu pra salvar (armazenamento do navegador cheio) — tente baixar o documento em vez disso';
   setTimeout(()=> docProgress.textContent = '', 6000);
-  if(ok) document.getElementById('savedCard').scrollIntoView({behavior:'smooth', block:'nearest'});
+  if(ok){
+    activateTab('tabPanel2');
+    document.getElementById('savedCard').scrollIntoView({behavior:'smooth', block:'nearest'});
+  }
 }
 saveAnalysisBtn.addEventListener('click', saveCurrentAnalysis);
 
@@ -2430,6 +2456,7 @@ function openSavedAnalysis(id){
   renderResultsStats();
   summaryRow.style.display = 'flex';
   saveState();
+  activateTab('tabPanel1');
   resultsCard.scrollIntoView({behavior:'smooth', block:'nearest'});
 }
 
