@@ -598,6 +598,41 @@
     color:var(--ink-soft);
     padding:6px 0;
   }
+
+  /* ---------- pastas de curso (agrupamento das análises salvas) ---------- */
+  .curso-folder{
+    border:1px solid var(--line);
+    border-radius:3px;
+    background:rgba(255,255,255,0.25);
+    margin-bottom:14px;
+  }
+  .curso-folder > summary{
+    cursor:pointer;
+    list-style:none;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:12px 14px;
+    font-weight:700;
+    font-size:14px;
+    user-select:none;
+  }
+  .curso-folder > summary::-webkit-details-marker{display:none;}
+  .curso-folder > summary::before{content:'▸📁 ';color:var(--teal-bright);}
+  .curso-folder[open] > summary::before{content:'▾📂 ';}
+  .curso-folder > summary::after{
+    content:attr(data-count);
+    margin-left:auto;
+    font-family:'Courier New',monospace;
+    font-weight:400;
+    font-size:11px;
+    color:var(--ink-soft);
+  }
+  .curso-folder .folder-body{
+    padding:0 14px 14px;
+    display:grid;
+    gap:10px;
+  }
   @media (max-width:600px){
     main{padding:28px 16px 80px;}
     .card{padding:20px 18px;}
@@ -610,7 +645,7 @@
 <header>
   <div class="tab">ferramenta de estudo</div>
   <h1>Achador de respostas</h1>
-  <p>Curso: Metodologia do Ensino de Geografia</p>
+  <p>Curso: <span id="cursoHeaderLabel">nenhum curso selecionado</span></p>
   <p>Suba os PDFs do curso, digite a questão com suas alternativas e o sistema indica, por aproximação de palavras, qual alternativa é mais sustentada pelo texto.</p>
 </header>
 
@@ -634,21 +669,21 @@
   </section>
 
   <section class="card" data-label="02 — Questões">
+    <div class="row" style="margin-bottom:10px;">
+      <select id="cursoSelect" style="flex:1;min-width:240px;">
+        <option value="">Selecione o curso…</option>
+      </select>
+      <button class="btn ghost small" id="addCursoBtn">+ novo curso</button>
+      <button class="btn ghost small" id="deleteCursoBtn" title="Exclui o curso selecionado (não apaga análises já salvas)">🗑 excluir curso</button>
+    </div>
     <div class="row" style="margin-bottom:6px;">
       <select id="disciplinaSelect" style="flex:1;min-width:240px;">
         <option value="">Selecione a disciplina…</option>
-        <option>Conhecimento Geográfico</option>
-        <option>Didática e Metodologia do Ensino Superior</option>
-        <option>Ética na Educação</option>
-        <option>Introdução à Geografia</option>
-        <option>Libras</option>
-        <option>Metodologia da Pesquisa e Produção Científica</option>
-        <option>Métodos e Técnicas para o Ensino de Geografia</option>
-        <option>Noções Básicas de Cartografia, Geomorfologia e Biogeografia</option>
-        <option>Relacionamento Interpessoal e Marketing Pessoal</option>
-        <option>TCC - Trabalho de Conclusão de Curso</option>
       </select>
+      <button class="btn ghost small" id="addDisciplinaBtn" title="Você pode colar várias disciplinas de uma vez, separadas por vírgula ou uma por linha">+ nova(s) disciplina(s)</button>
+      <button class="btn ghost small" id="deleteDisciplinaBtn" title="Exclui a disciplina selecionada deste curso">🗑 excluir disciplina</button>
     </div>
+    <div class="hint" style="margin-top:0;margin-bottom:10px;">Cadastre o curso e as disciplinas dele acima — as análises salvas ficam organizadas em pastas por curso, na seção "04 — Análises salvas".</div>
     <div id="qform"></div>
     <div class="row">
       <button class="btn ghost" id="addQBtn">+ adicionar questão</button>
@@ -689,9 +724,10 @@
     <div class="row" id="summaryRow" style="display:none;margin-top:6px;border-top:1px solid var(--line);padding-top:16px;">
       <button class="btn" id="saveAnalysisBtn">💾 Salvar esta análise</button>
       <button class="btn" id="analysisDocBtn">📚 Gerar documento de análise</button>
+      <a class="btn ghost" id="driveFolderBtn" href="https://drive.google.com/drive/folders/1Aw8zqFDUB0jP6sawr-lp3q0cGj8i8e7P?usp=drive_link" target="_blank" rel="noopener noreferrer" title="Abre a pasta do Google Drive em outra aba, para você guardar lá o documento gerado" style="text-decoration:none;display:inline-flex;align-items:center;">📁 Guardar no Drive</a>
       <button class="btn ghost" id="clearBtn" title="Apaga PDFs enviados, questões, resultados e a disciplina selecionada">🗑 Limpar tudo</button>
       <span class="progress" id="docProgress"></span>
-      <span class="hint" style="margin-top:0;">"Salvar" guarda esta análise numa lista (abaixo) para reabrir ou baixar depois. "Gerar documento" cria um HTML pronto para imprimir/salvar como PDF, com enunciado, resposta, comentário e dica bibliográfica de cada questão.</span>
+      <span class="hint" style="margin-top:0;">"Salvar" guarda esta análise numa lista (abaixo) para reabrir ou baixar depois. "Gerar documento" cria um HTML pronto para imprimir/salvar como PDF, com enunciado, resposta, comentário e dica bibliográfica de cada questão. "Guardar no Drive" abre a pasta do curso no Google Drive, para você subir o documento baixado.</span>
     </div>
   </section>
 
@@ -724,6 +760,11 @@ const resultsStatsEl = document.getElementById('resultsStats');
 const saveAnalysisBtn = document.getElementById('saveAnalysisBtn');
 let lastResults = []; // guarda os dados de cada questão analisada, para gerar o resumo de estudo
 let savedAnalyses = []; // biblioteca de análises salvas pelo usuário (fica em localStorage, sobrevive a F5 e a fechar a aba)
+
+// cursos cadastrados pelo usuário e as disciplinas de cada um (tudo em localStorage deste navegador)
+let cursos = []; // ["Curso A", "Curso B", ...]
+let disciplinasPorCurso = {}; // { "Curso A": ["Disciplina 1", "Disciplina 2"], ... }
+let disciplinaSelecionadaPorCurso = {}; // { "Curso A": "Disciplina 1" } — lembra a última disciplina escolhida em cada curso
 
 dropEl.addEventListener('click', () => fileInput.click());
 ['dragenter','dragover'].forEach(ev => dropEl.addEventListener(ev, e => {
@@ -1323,17 +1364,168 @@ document.getElementById('clearKeyBtn').addEventListener('click', () => {
   setTimeout(()=> keyStatusEl.textContent = '', 3000);
 });
 
-// ---------- disciplina selecionada (fica salva só no localStorage deste navegador) ----------
+// ---------- cursos e disciplinas (cadastrados pelo usuário, ficam salvos só no localStorage deste navegador) ----------
+const cursoSelectEl = document.getElementById('cursoSelect');
 const disciplinaSelectEl = document.getElementById('disciplinaSelect');
-(function loadStoredDisciplina(){
+const cursoHeaderLabelEl = document.getElementById('cursoHeaderLabel');
+
+const CURSOS_KEY = 'achador_cursos_v1';
+const DISCIPLINAS_KEY = 'achador_disciplinas_por_curso_v1';
+const DISCIPLINA_SEL_KEY = 'achador_disciplina_por_curso_v1';
+const CURSO_ATUAL_KEY = 'achador_curso_atual';
+
+// lista original que já vinha fixa no sistema — usada só para popular o primeiro curso
+// automaticamente, na primeira vez que alguém abre esta versão (migração suave).
+const DISCIPLINAS_PADRAO = [
+  'Conhecimento Geográfico',
+  'Didática e Metodologia do Ensino Superior',
+  'Ética na Educação',
+  'Introdução à Geografia',
+  'Libras',
+  'Metodologia da Pesquisa e Produção Científica',
+  'Métodos e Técnicas para o Ensino de Geografia',
+  'Noções Básicas de Cartografia, Geomorfologia e Biogeografia',
+  'Relacionamento Interpessoal e Marketing Pessoal',
+  'TCC - Trabalho de Conclusão de Curso'
+];
+const CURSO_PADRAO = 'Metodologia do Ensino de Geografia';
+
+function loadCursosState(){
   try{
-    const stored = window.localStorage.getItem('achador_disciplina');
-    if(stored) disciplinaSelectEl.value = stored;
-  }catch(e){ /* localStorage indisponível — segue sem persistir */ }
-})();
+    const c = window.localStorage.getItem(CURSOS_KEY);
+    if(c){ const parsed = JSON.parse(c); if(Array.isArray(parsed)) cursos = parsed; }
+    const d = window.localStorage.getItem(DISCIPLINAS_KEY);
+    if(d){ const parsed = JSON.parse(d); if(parsed && typeof parsed === 'object') disciplinasPorCurso = parsed; }
+    const ds = window.localStorage.getItem(DISCIPLINA_SEL_KEY);
+    if(ds){ const parsed = JSON.parse(ds); if(parsed && typeof parsed === 'object') disciplinaSelecionadaPorCurso = parsed; }
+  }catch(e){ /* localStorage indisponível — segue com listas vazias */ }
+
+  // migração: se ainda não existe nenhum curso cadastrado, mas já havia uma disciplina
+  // escolhida no formato antigo (ou é a primeira vez), cria o curso padrão com a lista original.
+  if(!cursos.length){
+    cursos = [CURSO_PADRAO];
+    disciplinasPorCurso[CURSO_PADRAO] = DISCIPLINAS_PADRAO.slice();
+    let disciplinaAntiga = '';
+    try{ disciplinaAntiga = window.localStorage.getItem('achador_disciplina') || ''; }catch(e){ /* ignora */ }
+    if(disciplinaAntiga) disciplinaSelecionadaPorCurso[CURSO_PADRAO] = disciplinaAntiga;
+    persistCursosState();
+  }
+}
+
+function persistCursosState(){
+  try{
+    window.localStorage.setItem(CURSOS_KEY, JSON.stringify(cursos));
+    window.localStorage.setItem(DISCIPLINAS_KEY, JSON.stringify(disciplinasPorCurso));
+    window.localStorage.setItem(DISCIPLINA_SEL_KEY, JSON.stringify(disciplinaSelecionadaPorCurso));
+  }catch(e){ /* ignora */ }
+}
+
+function getCursoAtual(){ return cursoSelectEl.value; }
+
+function renderCursoOptions(){
+  const atual = cursoSelectEl.value;
+  cursoSelectEl.innerHTML = '<option value="">Selecione o curso…</option>' +
+    cursos.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  if(atual && cursos.includes(atual)) cursoSelectEl.value = atual;
+}
+
+function renderDisciplinaOptions(){
+  const curso = getCursoAtual();
+  const lista = curso ? (disciplinasPorCurso[curso] || []) : [];
+  disciplinaSelectEl.innerHTML = '<option value="">Selecione a disciplina…</option>' +
+    lista.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('');
+  const lembrada = curso ? disciplinaSelecionadaPorCurso[curso] : '';
+  if(lembrada && lista.includes(lembrada)) disciplinaSelectEl.value = lembrada;
+}
+
+function updateCursoHeaderLabel(){
+  const curso = getCursoAtual();
+  cursoHeaderLabelEl.textContent = curso || 'nenhum curso selecionado';
+}
+
+function selectCurso(nome){
+  cursoSelectEl.value = nome;
+  try{ window.localStorage.setItem(CURSO_ATUAL_KEY, nome); }catch(e){ /* ignora */ }
+  renderDisciplinaOptions();
+  updateCursoHeaderLabel();
+}
+
+cursoSelectEl.addEventListener('change', () => {
+  try{ window.localStorage.setItem(CURSO_ATUAL_KEY, cursoSelectEl.value); }catch(e){ /* ignora */ }
+  renderDisciplinaOptions();
+  updateCursoHeaderLabel();
+});
+
+document.getElementById('addCursoBtn').addEventListener('click', () => {
+  const nome = (window.prompt('Nome do novo curso:') || '').trim();
+  if(!nome) return;
+  if(!cursos.includes(nome)){
+    cursos.push(nome);
+    if(!disciplinasPorCurso[nome]) disciplinasPorCurso[nome] = [];
+    persistCursosState();
+  }
+  renderCursoOptions();
+  selectCurso(nome);
+});
+
+document.getElementById('deleteCursoBtn').addEventListener('click', () => {
+  const curso = getCursoAtual();
+  if(!curso){ window.alert('Selecione um curso para excluir.'); return; }
+  if(!window.confirm(`Excluir o curso "${curso}" da lista? As análises já salvas para ele continuam guardadas, só o cadastro do curso e das disciplinas dele é removido.`)) return;
+  cursos = cursos.filter(c => c !== curso);
+  delete disciplinasPorCurso[curso];
+  delete disciplinaSelecionadaPorCurso[curso];
+  persistCursosState();
+  renderCursoOptions();
+  selectCurso('');
+});
+
+document.getElementById('addDisciplinaBtn').addEventListener('click', () => {
+  const curso = getCursoAtual();
+  if(!curso){ window.alert('Selecione (ou cadastre) um curso antes de adicionar uma disciplina.'); return; }
+  const texto = window.prompt('Nome da(s) disciplina(s) para "' + curso + '":\n(pode colar várias de uma vez — separe por vírgula ou uma por linha)') || '';
+  const nomes = texto.split(/[,\n]/).map(s => s.trim()).filter(Boolean);
+  if(!nomes.length) return;
+  if(!disciplinasPorCurso[curso]) disciplinasPorCurso[curso] = [];
+  let ultimaAdicionada = '';
+  nomes.forEach(nome => {
+    if(!disciplinasPorCurso[curso].includes(nome)) disciplinasPorCurso[curso].push(nome);
+    ultimaAdicionada = nome;
+  });
+  disciplinaSelecionadaPorCurso[curso] = ultimaAdicionada;
+  persistCursosState();
+  renderDisciplinaOptions();
+});
+
+document.getElementById('deleteDisciplinaBtn').addEventListener('click', () => {
+  const curso = getCursoAtual();
+  const disciplina = disciplinaSelectEl.value;
+  if(!curso || !disciplina){ window.alert('Selecione um curso e uma disciplina para excluir.'); return; }
+  if(!window.confirm(`Excluir a disciplina "${disciplina}" do curso "${curso}"?`)) return;
+  disciplinasPorCurso[curso] = (disciplinasPorCurso[curso] || []).filter(d => d !== disciplina);
+  if(disciplinaSelecionadaPorCurso[curso] === disciplina) delete disciplinaSelecionadaPorCurso[curso];
+  persistCursosState();
+  renderDisciplinaOptions();
+});
+
 disciplinaSelectEl.addEventListener('change', () => {
+  const curso = getCursoAtual();
+  if(curso){
+    disciplinaSelecionadaPorCurso[curso] = disciplinaSelectEl.value;
+    persistCursosState();
+  }
+  // mantém compatibilidade com o formato antigo, caso algo externo ainda leia essa chave
   try{ window.localStorage.setItem('achador_disciplina', disciplinaSelectEl.value); }catch(e){ /* ignora */ }
 });
+
+(function initCursosUI(){
+  loadCursosState();
+  renderCursoOptions();
+  let cursoInicial = '';
+  try{ cursoInicial = window.localStorage.getItem(CURSO_ATUAL_KEY) || ''; }catch(e){ /* ignora */ }
+  if(!cursoInicial || !cursos.includes(cursoInicial)) cursoInicial = cursos[0] || '';
+  selectCurso(cursoInicial);
+})();
 
 async function analyzeWithAI(question, contextParas, allowWebSearch, disciplina){
   const contextText = contextParas.length
@@ -1906,43 +2098,70 @@ function persistSavedAnalyses(){
   }
 }
 
+function buildSavedCard(entry){
+  const card = document.createElement('div');
+  card.className = 'saved-card';
+  const qCount = entry.results.length;
+  const metaBits = [
+    entry.dataStr,
+    entry.disciplina || 'sem disciplina definida',
+    `${qCount} questão${qCount>1?'ões':''}`
+  ];
+  if(entry.docNames && entry.docNames.length) metaBits.push(entry.docNames.join(', '));
+  card.innerHTML = `
+    <div class="info">
+      <div class="sname">${escapeHtml(entry.name)}</div>
+      <div class="smeta">${metaBits.map(b => `<span>${escapeHtml(b)}</span>`).join('')}</div>
+    </div>
+    <div class="sbtns">
+      <button class="btn ghost small" data-act="open">👁 abrir</button>
+      <button class="btn ghost small" data-act="download">⬇ baixar</button>
+      <button class="btn ghost small" data-act="delete">🗑 excluir</button>
+    </div>`;
+  card.querySelector('[data-act="open"]').addEventListener('click', () => openSavedAnalysis(entry.id));
+  card.querySelector('[data-act="download"]').addEventListener('click', () => {
+    downloadAnalysisDocument(entry.results, entry.disciplina, entry.docNames, entry.name);
+  });
+  card.querySelector('[data-act="delete"]').addEventListener('click', () => deleteSavedAnalysis(entry.id));
+  return card;
+}
+
 function renderSavedList(){
   savedListEl.innerHTML = '';
   const has = savedAnalyses.length > 0;
   savedEmptyEl.style.display = has ? 'none' : 'block';
   savedBulkRow.style.display = has ? 'flex' : 'none';
+
+  // agrupa as análises salvas em "pastas" por curso, na ordem em que os cursos aparecem
+  // primeiro entre as análises salvas (mais recentes primeiro, já que savedAnalyses é unshift)
+  const grupos = new Map(); // nome do curso (ou '' p/ sem curso) -> [entries]
   savedAnalyses.forEach(entry => {
-    const card = document.createElement('div');
-    card.className = 'saved-card';
-    const qCount = entry.results.length;
-    const metaBits = [
-      entry.dataStr,
-      entry.disciplina || 'sem disciplina definida',
-      `${qCount} questão${qCount>1?'ões':''}`
-    ];
-    if(entry.docNames && entry.docNames.length) metaBits.push(entry.docNames.join(', '));
-    card.innerHTML = `
-      <div class="info">
-        <div class="sname">${escapeHtml(entry.name)}</div>
-        <div class="smeta">${metaBits.map(b => `<span>${escapeHtml(b)}</span>`).join('')}</div>
-      </div>
-      <div class="sbtns">
-        <button class="btn ghost small" data-act="open">👁 abrir</button>
-        <button class="btn ghost small" data-act="download">⬇ baixar</button>
-        <button class="btn ghost small" data-act="delete">🗑 excluir</button>
-      </div>`;
-    card.querySelector('[data-act="open"]').addEventListener('click', () => openSavedAnalysis(entry.id));
-    card.querySelector('[data-act="download"]').addEventListener('click', () => {
-      downloadAnalysisDocument(entry.results, entry.disciplina, entry.docNames, entry.name);
-    });
-    card.querySelector('[data-act="delete"]').addEventListener('click', () => deleteSavedAnalysis(entry.id));
-    savedListEl.appendChild(card);
+    const chave = entry.curso || '';
+    if(!grupos.has(chave)) grupos.set(chave, []);
+    grupos.get(chave).push(entry);
   });
+
+  grupos.forEach((entries, curso) => {
+    const folder = document.createElement('details');
+    folder.className = 'curso-folder';
+    folder.open = true;
+    const summary = document.createElement('summary');
+    summary.textContent = curso || 'Sem curso definido';
+    summary.setAttribute('data-count', `${entries.length} análise${entries.length>1?'s':''}`);
+    folder.appendChild(summary);
+    const body = document.createElement('div');
+    body.className = 'folder-body';
+    entries.forEach(entry => body.appendChild(buildSavedCard(entry)));
+    folder.appendChild(body);
+    savedListEl.appendChild(folder);
+  });
+
   updateStepsNav();
 }
 
 function saveCurrentAnalysis(){
   if(!lastResults.length) return;
+  const curso = getCursoAtual() || '';
   const disciplina = (lastResults[0] && lastResults[0].disciplina) || document.getElementById('disciplinaSelect').value || '';
   const now = new Date();
   const defaultName = (disciplina ? disciplina + ' — ' : 'Análise — ') + now.toLocaleDateString('pt-BR');
@@ -1951,6 +2170,7 @@ function saveCurrentAnalysis(){
   const entry = {
     id: 'sa' + Date.now(),
     name: name.trim() || defaultName,
+    curso,
     disciplina,
     docNames: documents.map(d => d.name),
     dataStr: now.toLocaleDateString('pt-BR') + ' ' + now.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}),
@@ -1975,6 +2195,7 @@ function openSavedAnalysis(id){
     return;
   }
   lastResults = JSON.parse(JSON.stringify(entry.results));
+  if(entry.curso && cursos.includes(entry.curso)) selectCurso(entry.curso);
   if(entry.disciplina) document.getElementById('disciplinaSelect').value = entry.disciplina;
   resultsCard.style.display = 'block';
   resultsEl.innerHTML = '';
@@ -1998,14 +2219,30 @@ function downloadAllSavedAnalyses(){
   if(!savedAnalyses.length) return;
   const now = new Date();
   const dataStr = now.toLocaleDateString('pt-BR') + ' ' + now.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
-  const sections = savedAnalyses.map(entry => {
-    const body = buildAnalysisDocBodyHtml(entry.results, entry.disciplina, entry.docNames);
-    return `<div class="saved-section">
-      <h2 class="saved-section-title">${escapeHtml(entry.name)}</h2>
-      <div class="meta">${escapeHtml(entry.dataStr)} · material: ${entry.docNames.length ? escapeHtml(entry.docNames.join(', ')) : '—'}</div>
-      ${body.bodyInner.replace(/^<h1>.*?<\/h1>\s*<div class="meta">.*?<\/div>/s, '')}
-    </div>`;
-  }).join('\n<hr style="margin:32px 0;border:none;border-top:2px solid #ccc;">\n');
+
+  const grupos = new Map();
+  savedAnalyses.forEach(entry => {
+    const chave = entry.curso || '';
+    if(!grupos.has(chave)) grupos.set(chave, []);
+    grupos.get(chave).push(entry);
+  });
+
+  const cursoSections = [];
+  grupos.forEach((entries, curso) => {
+    const entrySections = entries.map(entry => {
+      const body = buildAnalysisDocBodyHtml(entry.results, entry.disciplina, entry.docNames);
+      return `<div class="saved-section">
+        <h2 class="saved-section-title">${escapeHtml(entry.name)}</h2>
+        <div class="meta">${escapeHtml(entry.dataStr)} · material: ${entry.docNames.length ? escapeHtml(entry.docNames.join(', ')) : '—'}</div>
+        ${body.bodyInner.replace(/^<h1>.*?<\/h1>\s*<div class="meta">.*?<\/div>/s, '')}
+      </div>`;
+    }).join('\n<hr style="margin:32px 0;border:none;border-top:2px solid #ccc;">\n');
+    cursoSections.push(`<div class="curso-section">
+      <h1 style="border-bottom:2px solid #22514a;padding-bottom:6px;">📁 ${escapeHtml(curso || 'Sem curso definido')}</h1>
+      ${entrySections}
+    </div>`);
+  });
+  const sections = cursoSections.join('\n<hr style="margin:40px 0;border:none;border-top:4px double #22514a;">\n');
 
   const html = `<!DOCTYPE html>
 <html lang="pt-BR"><head><meta charset="UTF-8">
