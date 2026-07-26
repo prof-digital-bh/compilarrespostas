@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Achador — busca de respostas em PDFs</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
 <style>
   :root{
     --paper: #eee7d8;
@@ -209,6 +210,8 @@
     font-family:'Courier New',monospace;
   }
   .qcard-head button:hover{color:#a4432e;}
+  .qcard-head-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+  .qcard-head-actions button:first-child:hover{color:var(--teal-bright);}
   .raw-wrap{
     background:var(--mark-soft);
     border:1px dashed var(--teal-bright);
@@ -706,10 +709,11 @@
         <input type="password" id="apiKeyInput" placeholder="sk-ant-... (sua chave da API Anthropic)" autocomplete="off"
           style="flex:1;min-width:220px;border:1px solid var(--line);border-radius:2px;background:#fff;color:var(--ink);padding:8px 10px;font-family:'Courier New',monospace;font-size:12.5px;">
         <button class="btn ghost small" id="saveKeyBtn">Salvar chave</button>
+        <button class="btn ghost small" id="exportKeyBtn" title="Baixa a chave num arquivo separado do backup geral, para você guardar em local seguro (ex.: Google Drive)">⬇ Baixar chave (arquivo à parte)</button>
         <button class="btn ghost small" id="clearKeyBtn">Remover chave</button>
         <span class="raw-feedback" id="keyStatus"></span>
       </div>
-      <div class="hint">Fora do Claude.ai, a IA só funciona se você colar aqui sua própria chave da API Anthropic (crie em <span style="text-decoration:underline;">console.anthropic.com</span>). A chave fica salva só no seu navegador (localStorage) e é enviada direto da sua máquina para a API da Anthropic — nunca passa por nenhum servidor terceiro. Ainda assim, qualquer código no seu navegador pode em teoria ler essa chave; não use este arquivo em computadores/sites que não são de confiança. Dentro do Claude.ai, deixe o campo vazio — a IA funciona sem chave.</div>
+      <div class="hint">Fora do Claude.ai, a IA só funciona se você colar aqui sua própria chave da API Anthropic (crie em <span style="text-decoration:underline;">console.anthropic.com</span>). A chave fica salva só no seu navegador (localStorage) e é enviada direto da sua máquina para a API da Anthropic — nunca passa por nenhum servidor terceiro. Ainda assim, qualquer código no seu navegador pode em teoria ler essa chave; não use este arquivo em computadores/sites que não são de confiança. Dentro do Claude.ai, deixe o campo vazio — a IA funciona sem chave. Por segurança, a chave NÃO entra no backup geral (seção 04) — use "Baixar chave" aqui do lado para guardá-la separadamente (ex.: numa pasta protegida no seu Google Drive) e "Importar" no outro computador digitando/colando o conteúdo desse arquivo no campo acima.</div>
       <div class="hint">Com IA ligada, o Claude lê o(s) trecho(s) mais relevantes do PDF e decide qual alternativa está correta pelo significado. Com "consultar fontes na internet" também ligado, ele pode pesquisar na web para confirmar ou complementar o que o material enviado não deixa claro, priorizando sempre o material como fonte principal. Se a IA falhar ou estiver desligada, o sistema usa o modo de aproximação por palavras (menos confiável, mas funciona offline).</div>
     </details>
     <div class="row" style="margin-top:20px;border-top:1px solid var(--line);padding-top:16px;">
@@ -737,6 +741,14 @@
     <div class="row" id="savedBulkRow" style="display:none;margin-top:14px;border-top:1px solid var(--line);padding-top:14px;">
       <button class="btn ghost small" id="downloadAllSavedBtn">📦 Baixar todas em um só documento</button>
       <span class="hint" style="margin-top:0;">Junta todas as análises salvas num único arquivo HTML (imprimível/PDF), organizadas por nome e data.</span>
+    </div>
+    <div class="row" id="backupRow" style="margin-top:14px;border-top:1px solid var(--line);padding-top:14px;">
+      <button class="btn ghost small" id="exportBackupBtn">⬇ Exportar dados (arquivo compactado)</button>
+      <button class="btn ghost small" id="importBackupBtn">⬆ Importar dados de um arquivo</button>
+      <input type="file" id="importBackupInput" accept=".achador,.txt,.json" style="display:none;">
+      <a class="btn ghost small" id="backupDriveFolderBtn" href="https://drive.google.com/drive/folders/1Aw8zqFDUB0jP6sawr-lp3q0cGj8i8e7P?usp=drive_link" target="_blank" rel="noopener noreferrer" title="Abre a pasta do Google Drive em outra aba — crie lá uma subpasta separada para guardar os arquivos de backup e de chave de API" style="text-decoration:none;display:inline-flex;align-items:center;">📁 Abrir pasta do Drive</a>
+      <span class="progress" id="backupProgress"></span>
+      <span class="hint" style="margin-top:0;">Gera um arquivo pequeno e compactado com cursos, disciplinas, PDFs enviados, questões e todas as análises salvas deste navegador. Leve o arquivo para outro computador (e-mail, pendrive, Drive etc.) e use "Importar" lá para trazer tudo de volta. Isso substitui os dados atuais daquele navegador. Por segurança, sua chave de API (se você usa uma própria) não entra no arquivo — baixe-a à parte, lá em cima, em "Opções da IA". Dica: crie uma subpasta própria dentro da pasta do Drive (botão ao lado) para guardar backups e a chave separados dos documentos de análise.</span>
     </div>
   </section>
 </main>
@@ -1069,6 +1081,23 @@ function newQuestion(){
   questionModel.push({ id, altIds: ['a1','a2','a3','a4'].map(s => id + '_' + s) });
   renderQForm();
 }
+// insere uma questão em branco logo depois da questão indicada — útil quando o
+// usuário percebe que esqueceu uma questão no meio da lista já digitada
+function insertQuestionAfter(id){
+  const idx = questionModel.findIndex(q => q.id === id);
+  const newId = 'q' + (++qCounter);
+  const newQ = { id: newId, altIds: ['a1','a2','a3','a4'].map(s => newId + '_' + s) };
+  questionModel.splice(idx + 1, 0, newQ);
+  renderQForm();
+  requestAnimationFrame(() => {
+    const card = document.querySelector(`.qcard[data-qid="${newId}"]`);
+    if(card){
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const rawBox = card.querySelector('.raw-box');
+      if(rawBox) rawBox.focus();
+    }
+  });
+}
 function removeQuestion(id){
   if(questionModel.length <= 1){
     clearQuestion(id);
@@ -1176,11 +1205,19 @@ function renderQForm(){
     const head = document.createElement('div');
     head.className = 'qcard-head';
     head.innerHTML = `<span class="qn">Questão ${qi+1}</span>`;
+    const headActions = document.createElement('div');
+    headActions.className = 'qcard-head-actions';
+    const insertBtn = document.createElement('button');
+    insertBtn.textContent = '➕ inserir questão abaixo';
+    insertBtn.title = 'Insere uma questão em branco logo depois desta — útil se você esqueceu uma questão no meio da lista';
+    insertBtn.addEventListener('click', () => insertQuestionAfter(q.id));
+    headActions.appendChild(insertBtn);
     const rm = document.createElement('button');
     rm.textContent = questionModel.length > 1 ? '✕ remover' : '🗑 apagar para inserir outra';
     rm.title = questionModel.length > 1 ? 'Remove esta questão' : 'Limpa os campos para digitar/colar a próxima questão';
     rm.addEventListener('click', () => removeQuestion(q.id));
-    head.appendChild(rm);
+    headActions.appendChild(rm);
+    head.appendChild(headActions);
     card.appendChild(head);
 
     // caixa de colar texto bruto + estruturar automaticamente
@@ -1354,6 +1391,31 @@ document.getElementById('saveKeyBtn').addEventListener('click', () => {
   try{ window.localStorage.setItem('achador_anthropic_key', userApiKey); }catch(e){ /* ignora */ }
   keyStatusEl.textContent = userApiKey ? 'chave salva neste navegador' : '';
   setTimeout(()=> keyStatusEl.textContent = '', 3000);
+});
+
+document.getElementById('exportKeyBtn').addEventListener('click', () => {
+  const chave = (apiKeyInput.value || userApiKey || '').trim();
+  if(!chave){ window.alert('Cole sua chave da API no campo acima (e clique em "Salvar chave") antes de baixar o arquivo.'); return; }
+  const conteudo = `Achador de respostas — chave da API Anthropic
+Gerado em: ${new Date().toLocaleString('pt-BR')}
+
+${chave}
+
+⚠ Este arquivo contém uma chave secreta. Não compartilhe nem deixe em pastas públicas.
+Guarde-o num local próprio e seguro (ex.: uma pasta privada no seu Google Drive), separado do backup geral de dados.
+Para usar em outro computador: abra este arquivo, copie a chave (a linha acima) e cole no campo "sk-ant-..." desta página, depois clique em "Salvar chave".`;
+  const blob = new Blob([conteudo], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().slice(0,10);
+  a.href = url;
+  a.download = `achador-chave-api-${stamp}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  keyStatusEl.textContent = 'arquivo com a chave baixado ✓ — guarde-o em local seguro';
+  setTimeout(()=> keyStatusEl.textContent = '', 5000);
 });
 
 document.getElementById('clearKeyBtn').addEventListener('click', () => {
@@ -2144,7 +2206,7 @@ function renderSavedList(){
   grupos.forEach((entries, curso) => {
     const folder = document.createElement('details');
     folder.className = 'curso-folder';
-    folder.open = true;
+    folder.open = false;
     const summary = document.createElement('summary');
     summary.textContent = curso || 'Sem curso definido';
     summary.setAttribute('data-count', `${entries.length} análise${entries.length>1?'s':''}`);
@@ -2273,6 +2335,97 @@ function downloadAllSavedAnalyses(){
   URL.revokeObjectURL(url);
 }
 document.getElementById('downloadAllSavedBtn').addEventListener('click', downloadAllSavedAnalyses);
+
+// ---------- exportar / importar dados (backup compactado, para levar a outro computador) ----------
+// Junta cursos, disciplinas, PDFs/questões/resultados em andamento e as análises salvas
+// num único JSON, compacta com LZString e baixa como arquivo de texto. Em outro computador,
+// "Importar" faz o caminho inverso e substitui os dados locais pelos do arquivo.
+const exportBackupBtn = document.getElementById('exportBackupBtn');
+const importBackupBtn = document.getElementById('importBackupBtn');
+const importBackupInput = document.getElementById('importBackupInput');
+const backupProgressEl = document.getElementById('backupProgress');
+const BACKUP_VERSION = 1;
+
+function collectBackupPayload(){
+  let state = null;
+  try{ state = JSON.parse(window.localStorage.getItem(STATE_KEY) || 'null'); }catch(e){ /* ignora */ }
+  return {
+    v: BACKUP_VERSION,
+    geradoEm: new Date().toISOString(),
+    cursos,
+    disciplinasPorCurso,
+    disciplinaSelecionadaPorCurso,
+    cursoAtual: getCursoAtual(),
+    savedAnalyses,
+    state
+  };
+}
+
+function exportBackup(){
+  if(typeof LZString === 'undefined'){
+    window.alert('Não foi possível carregar o compactador de dados (sem internet?). Tente novamente com conexão ativa.');
+    return;
+  }
+  const json = JSON.stringify(collectBackupPayload());
+  const compressed = LZString.compressToBase64(json);
+  const blob = new Blob([compressed], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().slice(0,10);
+  a.href = url;
+  a.download = `achador-backup-${stamp}.achador`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  const kb = (compressed.length / 1024).toFixed(1);
+  backupProgressEl.textContent = `backup gerado ✓ (~${kb} KB) — leve este arquivo ao outro computador e use "Importar" lá`;
+  setTimeout(()=> backupProgressEl.textContent = '', 8000);
+}
+exportBackupBtn.addEventListener('click', exportBackup);
+
+importBackupBtn.addEventListener('click', () => importBackupInput.click());
+importBackupInput.addEventListener('change', () => {
+  const file = importBackupInput.files[0];
+  importBackupInput.value = '';
+  if(!file) return;
+  if(typeof LZString === 'undefined'){
+    window.alert('Não foi possível carregar o descompactador de dados (sem internet?). Tente novamente com conexão ativa.');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      const compressed = String(reader.result || '').trim();
+      const json = LZString.decompressFromBase64(compressed);
+      if(!json) throw new Error('não foi possível descompactar — o arquivo pode estar corrompido ou não ser um backup deste app.');
+      const payload = JSON.parse(json);
+      if(!payload || payload.v !== BACKUP_VERSION) throw new Error('formato de backup não reconhecido.');
+      if(!window.confirm('Importar este backup vai SUBSTITUIR os cursos, disciplinas, PDFs, questões e análises salvas atuais deste navegador pelos dados do arquivo. Essa ação não pode ser desfeita. Continuar?')) return;
+
+      cursos = Array.isArray(payload.cursos) ? payload.cursos : [];
+      disciplinasPorCurso = (payload.disciplinasPorCurso && typeof payload.disciplinasPorCurso === 'object') ? payload.disciplinasPorCurso : {};
+      disciplinaSelecionadaPorCurso = (payload.disciplinaSelecionadaPorCurso && typeof payload.disciplinaSelecionadaPorCurso === 'object') ? payload.disciplinaSelecionadaPorCurso : {};
+      persistCursosState();
+      try{ window.localStorage.setItem(CURSO_ATUAL_KEY, payload.cursoAtual || ''); }catch(e){ /* ignora */ }
+
+      savedAnalyses = Array.isArray(payload.savedAnalyses) ? payload.savedAnalyses : [];
+      try{ window.localStorage.setItem(SAVED_KEY, JSON.stringify(savedAnalyses)); }catch(e){ /* ignora */ }
+
+      try{
+        if(payload.state) window.localStorage.setItem(STATE_KEY, JSON.stringify(payload.state));
+        else window.localStorage.removeItem(STATE_KEY);
+      }catch(e){ /* ignora */ }
+
+      backupProgressEl.textContent = 'backup importado ✓ — recarregando a página…';
+      setTimeout(() => window.location.reload(), 900);
+    }catch(err){
+      window.alert('Não foi possível importar este arquivo: ' + err.message);
+    }
+  };
+  reader.onerror = () => window.alert('Não foi possível ler o arquivo selecionado.');
+  reader.readAsText(file);
+});
 
 loadSavedAnalyses();
 renderSavedList();
