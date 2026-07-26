@@ -565,8 +565,8 @@
     gap:0;
   }
   .steps{
-    flex:0 0 240px;
-    width:240px;
+    flex:0 0 auto;
+    width:max-content;
     display:flex;
     flex-direction:column;
     gap:8px;
@@ -604,6 +604,11 @@
   .step.active{background:var(--teal);border-color:var(--teal);color:var(--paper);}
   .step.active .num{background:var(--paper);border-color:var(--paper);color:var(--teal);}
   .step.active.done .num{background:var(--paper);border-color:var(--paper);color:var(--teal-bright);}
+  .step{text-decoration:none;white-space:nowrap;}
+  .steps-divider{height:1px;background:var(--line);margin:6px 2px;}
+  .step-link{border-style:dashed;}
+  .step-link:hover{background:var(--mark-soft);border-color:var(--mark);}
+  .step-link .num{background:var(--mark-soft);}
 
   /* ---------- painéis das abas ---------- */
   .tab-panel{display:none;}
@@ -815,6 +820,8 @@
   <div class="step active" id="step1" data-tab="tabPanel1"><span class="num">1</span> Documentos, Questões e Resultados</div>
   <div class="step" id="step4" data-tab="tabPanel2"><span class="num">2</span> Análises salvas</div>
   <div class="step" id="step5" data-tab="tabPanel3"><span class="num">3</span> Exportar / Importar dados</div>
+  <div class="steps-divider"></div>
+  <a class="step step-link" href="https://www.avaipemig.com.br/ava/" target="_blank" rel="noopener noreferrer" title="Abre o AVA do IPEMIG em outra aba"><span class="num">↗</span> IPEMIG</a>
 </div>
 
 <main>
