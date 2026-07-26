@@ -723,6 +723,7 @@
         <option value="">Selecione a disciplina…</option>
       </select>
       <button class="btn ghost small" id="addDisciplinaBtn" title="Você pode colar várias disciplinas de uma vez, separadas por vírgula ou uma por linha">+ nova(s) disciplina(s)</button>
+      <button class="btn ghost small" id="editDisciplinaBtn" title="Renomeia a disciplina selecionada">✎ editar disciplina</button>
       <button class="btn ghost small" id="deleteDisciplinaBtn" title="Exclui a disciplina selecionada deste curso">🗑 excluir disciplina</button>
     </div>
     <div class="hint" style="margin-top:0;margin-bottom:10px;">Cadastre o curso e as disciplinas dele acima — as análises salvas ficam organizadas em pastas por curso, na seção "04 — Análises salvas".</div>
@@ -1620,6 +1621,45 @@ document.getElementById('addDisciplinaBtn').addEventListener('click', () => {
   disciplinaSelecionadaPorCurso[curso] = ultimaAdicionada;
   persistCursosState();
   renderDisciplinaOptions();
+});
+
+document.getElementById('editDisciplinaBtn').addEventListener('click', () => {
+  const curso = getCursoAtual();
+  const disciplinaAntiga = disciplinaSelectEl.value;
+  if(!curso || !disciplinaAntiga){ window.alert('Selecione um curso e uma disciplina para editar.'); return; }
+  const novoNome = (window.prompt('Novo nome para a disciplina:', disciplinaAntiga) || '').trim();
+  if(!novoNome || novoNome === disciplinaAntiga) return;
+  const lista = disciplinasPorCurso[curso] || [];
+  if(lista.includes(novoNome)){
+    window.alert(`O curso "${curso}" já tem uma disciplina chamada "${novoNome}".`);
+    return;
+  }
+  // renomeia na lista do curso
+  disciplinasPorCurso[curso] = lista.map(d => d === disciplinaAntiga ? novoNome : d);
+  if(disciplinaSelecionadaPorCurso[curso] === disciplinaAntiga) disciplinaSelecionadaPorCurso[curso] = novoNome;
+  persistCursosState();
+
+  // atualiza também o nome nas análises já salvas com essa disciplina (mesmo curso),
+  // pra manter tudo consistente nas pastas/filtros de download
+  let analisesAtualizadas = 0;
+  savedAnalyses.forEach(entry => {
+    if((entry.curso || '') === curso && entry.disciplina === disciplinaAntiga){
+      entry.disciplina = novoNome;
+      analisesAtualizadas++;
+    }
+  });
+  if(analisesAtualizadas){
+    persistSavedAnalyses();
+    renderSavedList();
+  }
+
+  renderDisciplinaOptions();
+  disciplinaSelectEl.value = novoNome;
+  const docProgress = document.getElementById('docProgress');
+  if(docProgress){
+    docProgress.textContent = `disciplina renomeada ✓${analisesAtualizadas ? ` (atualizada em ${analisesAtualizadas} análise${analisesAtualizadas>1?'s':''} salva${analisesAtualizadas>1?'s':''})` : ''}`;
+    setTimeout(()=> docProgress.textContent = '', 6000);
+  }
 });
 
 document.getElementById('deleteDisciplinaBtn').addEventListener('click', () => {
