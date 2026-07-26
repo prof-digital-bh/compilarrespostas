@@ -767,6 +767,7 @@
     </details>
     <div class="row" style="margin-top:20px;border-top:1px solid var(--line);padding-top:16px;">
       <button class="btn" id="searchBtn">🔎 Analisar alternativas</button>
+      <button class="btn ghost" id="clearBtn" title="Apaga PDFs enviados, questões, resultados e a disciplina selecionada">🗑 Limpar dados</button>
       <span class="progress" id="progress"></span>
     </div>
   </section>
@@ -778,9 +779,11 @@
       <button class="btn" id="saveAnalysisBtn">💾 Salvar esta análise</button>
       <button class="btn" id="analysisDocBtn">📚 Gerar documento de análise</button>
       <a class="btn ghost" id="driveFolderBtn" href="https://drive.google.com/drive/folders/1Aw8zqFDUB0jP6sawr-lp3q0cGj8i8e7P?usp=drive_link" target="_blank" rel="noopener noreferrer" title="Abre a pasta do Google Drive em outra aba, para você guardar lá o documento gerado" style="text-decoration:none;display:inline-flex;align-items:center;">📁 Guardar no Drive</a>
-      <button class="btn ghost" id="clearBtn" title="Apaga PDFs enviados, questões, resultados e a disciplina selecionada">🗑 Limpar tudo</button>
       <span class="progress" id="docProgress"></span>
       <span class="hint" style="margin-top:0;">"Salvar" guarda esta análise numa lista (abaixo) para reabrir ou baixar depois. "Gerar documento" cria um HTML pronto para imprimir/salvar como PDF, com enunciado, resposta, comentário e dica bibliográfica de cada questão. "Guardar no Drive" abre a pasta do curso no Google Drive, para você subir o documento baixado.</span>
+    </div>
+    <div class="row" id="goToSavedRow" style="margin-top:10px;">
+      <a class="btn ghost small" id="goToSavedLink" style="cursor:pointer;">📂 Ver análises salvas →</a>
     </div>
   </section>
   </div>
@@ -1065,6 +1068,10 @@ function activateTab(tabId){
   document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.toggle('active', panel.id === tabId));
 }
 tabButtons.forEach(btn => btn.addEventListener('click', () => activateTab(btn.dataset.tab)));
+document.getElementById('goToSavedLink').addEventListener('click', () => {
+  activateTab('tabPanel2');
+  document.getElementById('savedCard').scrollIntoView({behavior:'smooth', block:'nearest'});
+});
 
 // ---------- indicador visual de progresso nas abas ----------
 function updateStepsNav(){
