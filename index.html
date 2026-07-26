@@ -817,6 +817,28 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="editDisciplinaOverlay">
+  <div class="modal-box" style="max-width:420px;">
+    <div class="modal-head">
+      <h3>Editar disciplina</h3>
+      <button class="modal-close" id="editDisciplinaClose" title="Fechar">✕</button>
+    </div>
+    <div class="hint" style="margin-top:0;margin-bottom:12px;">Curso: <strong id="editDisciplinaCursoLabel"></strong></div>
+    <div class="row" style="margin-bottom:10px;">
+      <select id="editDisciplinaSelect" style="flex:1;min-width:220px;"></select>
+    </div>
+    <div class="row" style="margin-bottom:6px;">
+      <input type="text" id="editDisciplinaNovoNome" placeholder="Novo nome da disciplina"
+        style="flex:1;min-width:220px;border:1px solid var(--line);border-radius:2px;background:#fff;color:var(--ink);padding:8px 10px;font-family:'Courier New',monospace;font-size:12.5px;">
+    </div>
+    <div class="hint" style="margin-top:0;">Escolha a disciplina na lista suspensa acima, ajuste o nome no campo e clique em "Salvar". Se ela já tiver análises salvas, o nome é atualizado nelas também.</div>
+    <div class="modal-actions">
+      <button class="btn" id="editDisciplinaSaveBtn">💾 Salvar</button>
+      <button class="btn ghost" id="editDisciplinaCancelBtn">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
@@ -1623,17 +1645,55 @@ document.getElementById('addDisciplinaBtn').addEventListener('click', () => {
   renderDisciplinaOptions();
 });
 
-document.getElementById('editDisciplinaBtn').addEventListener('click', () => {
+// ---------- modal: editar (renomear) uma disciplina já cadastrada, escolhida numa lista suspensa ----------
+const editDisciplinaOverlay = document.getElementById('editDisciplinaOverlay');
+const editDisciplinaCursoLabelEl = document.getElementById('editDisciplinaCursoLabel');
+const editDisciplinaSelectEl = document.getElementById('editDisciplinaSelect');
+const editDisciplinaNovoNomeEl = document.getElementById('editDisciplinaNovoNome');
+
+function openEditDisciplinaModal(){
   const curso = getCursoAtual();
-  const disciplinaAntiga = disciplinaSelectEl.value;
-  if(!curso || !disciplinaAntiga){ window.alert('Selecione um curso e uma disciplina para editar.'); return; }
-  const novoNome = (window.prompt('Novo nome para a disciplina:', disciplinaAntiga) || '').trim();
-  if(!novoNome || novoNome === disciplinaAntiga) return;
+  if(!curso){ window.alert('Selecione (ou cadastre) um curso antes de editar uma disciplina.'); return; }
+  const lista = disciplinasPorCurso[curso] || [];
+  if(!lista.length){ window.alert(`O curso "${curso}" ainda não tem disciplinas cadastradas.`); return; }
+
+  editDisciplinaCursoLabelEl.textContent = curso;
+  editDisciplinaSelectEl.innerHTML = lista.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('');
+  const atual = disciplinaSelectEl.value;
+  if(atual && lista.includes(atual)) editDisciplinaSelectEl.value = atual;
+  editDisciplinaNovoNomeEl.value = editDisciplinaSelectEl.value;
+  editDisciplinaOverlay.style.display = 'flex';
+  editDisciplinaNovoNomeEl.focus();
+  editDisciplinaNovoNomeEl.select();
+}
+function closeEditDisciplinaModal(){
+  editDisciplinaOverlay.style.display = 'none';
+}
+
+// ao trocar a disciplina na lista suspensa do modal, o campo de nome passa a
+// mostrar o nome atual dela, pronto para ser editado
+editDisciplinaSelectEl.addEventListener('change', () => {
+  editDisciplinaNovoNomeEl.value = editDisciplinaSelectEl.value;
+});
+
+document.getElementById('editDisciplinaBtn').addEventListener('click', openEditDisciplinaModal);
+document.getElementById('editDisciplinaClose').addEventListener('click', closeEditDisciplinaModal);
+document.getElementById('editDisciplinaCancelBtn').addEventListener('click', closeEditDisciplinaModal);
+editDisciplinaOverlay.addEventListener('click', (e) => { if(e.target === editDisciplinaOverlay) closeEditDisciplinaModal(); });
+
+document.getElementById('editDisciplinaSaveBtn').addEventListener('click', () => {
+  const curso = getCursoAtual();
+  const disciplinaAntiga = editDisciplinaSelectEl.value;
+  const novoNome = editDisciplinaNovoNomeEl.value.trim();
+  if(!curso || !disciplinaAntiga) return;
+  if(!novoNome){ window.alert('Digite um nome para a disciplina.'); return; }
+  if(novoNome === disciplinaAntiga){ closeEditDisciplinaModal(); return; }
   const lista = disciplinasPorCurso[curso] || [];
   if(lista.includes(novoNome)){
     window.alert(`O curso "${curso}" já tem uma disciplina chamada "${novoNome}".`);
     return;
   }
+
   // renomeia na lista do curso
   disciplinasPorCurso[curso] = lista.map(d => d === disciplinaAntiga ? novoNome : d);
   if(disciplinaSelecionadaPorCurso[curso] === disciplinaAntiga) disciplinaSelecionadaPorCurso[curso] = novoNome;
@@ -1655,6 +1715,8 @@ document.getElementById('editDisciplinaBtn').addEventListener('click', () => {
 
   renderDisciplinaOptions();
   disciplinaSelectEl.value = novoNome;
+  closeEditDisciplinaModal();
+
   const docProgress = document.getElementById('docProgress');
   if(docProgress){
     docProgress.textContent = `disciplina renomeada ✓${analisesAtualizadas ? ` (atualizada em ${analisesAtualizadas} análise${analisesAtualizadas>1?'s':''} salva${analisesAtualizadas>1?'s':''})` : ''}`;
