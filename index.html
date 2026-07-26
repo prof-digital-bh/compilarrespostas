@@ -2665,22 +2665,36 @@ function downloadAllSavedAnalyses(list){
     grupos.get(chave).push(entry);
   });
 
+  let contador = 0;
+  const tocGrupos = []; // { curso, itens: [{ numero, id, label }] }
   const cursoSections = [];
   grupos.forEach((entries, curso) => {
-    const entrySections = entries.map(entry => {
+    const cursoSlug = slugify(curso) || 'sem-curso';
+    const itensToc = [];
+    const entrySections = entries.map((entry, j) => {
+      contador += 1;
+      const anchorId = `an-${cursoSlug}-${j}`;
+      itensToc.push({ numero: contador, id: anchorId, label: entry.name || entry.disciplina || `Análise ${contador}` });
       const body = buildAnalysisDocBodyHtml(entry.results, entry.disciplina, entry.docNames);
-      return `<div class="saved-section">
+      return `<div class="saved-section" id="${anchorId}">
         <h2 class="saved-section-title">${escapeHtml(entry.name)}</h2>
         <div class="meta">${escapeHtml(entry.dataStr)} · material: ${entry.docNames.length ? escapeHtml(entry.docNames.join(', ')) : '—'}</div>
         ${body.bodyInner.replace(/^<h1>.*?<\/h1>\s*<div class="meta">.*?<\/div>/s, '')}
       </div>`;
     }).join('\n<hr style="margin:32px 0;border:none;border-top:2px solid #ccc;">\n');
+    tocGrupos.push({ curso, itens: itensToc });
     cursoSections.push(`<div class="curso-section">
       <h1 style="border-bottom:2px solid #22514a;padding-bottom:6px;">📁 ${escapeHtml(curso || 'Sem curso definido')}</h1>
       ${entrySections}
     </div>`);
   });
   const sections = cursoSections.join('\n<hr style="margin:40px 0;border:none;border-top:4px double #22514a;">\n');
+
+  const tocHtml = tocGrupos.map(g => `
+    <h2>${escapeHtml(g.curso || 'Sem curso definido')}</h2>
+    <ul>
+      ${g.itens.map(it => `<li><span class="num">${String(it.numero).padStart(2,'0')}.</span><a href="#${it.id}">${escapeHtml(it.label)}</a></li>`).join('\n      ')}
+    </ul>`).join('\n');
 
   const html = `<!DOCTYPE html>
 <html lang="pt-BR"><head><meta charset="UTF-8">
@@ -2690,12 +2704,32 @@ function downloadAllSavedAnalyses(list){
   .print-bar{position:sticky;top:0;display:flex;justify-content:flex-end;padding:10px 0 16px;background:#fff;}
   .print-bar button{font-family:'Courier New',monospace;font-size:12px;letter-spacing:.05em;text-transform:uppercase;padding:8px 16px;border-radius:3px;border:1px solid #22514a;background:#22514a;color:#eee7d8;cursor:pointer;}
   .print-bar button:hover{background:#2f7a6d;}
-  @media print{ .print-bar{ display:none !important; } }
+  .toc{margin:22px 0 32px;padding:18px 22px 14px;border:1px solid #c9bc9f;border-radius:4px;background:#faf7ef;}
+  .toc h2{font-size:15px;margin:16px 0 6px;color:#22514a;font-family:Georgia,'Iowan Old Style',serif;font-weight:600;}
+  .toc h2:first-child{margin-top:0;}
+  .toc ul{list-style:none;margin:0 0 4px;padding:0;}
+  .toc li{margin:4px 0;font-family:'Courier New',monospace;font-size:12.5px;}
+  .toc .num{color:#999;margin-right:6px;}
+  .toc a{color:#2f7a6d;text-decoration:none;}
+  .toc a:hover{text-decoration:underline;}
+  .toc-intro{font-size:13px;color:#444;margin:16px 0 0;line-height:1.55;padding-top:12px;border-top:1px dashed #c9bc9f;}
+  .toc-footer{margin-top:14px;padding-top:10px;border-top:1px solid #c9bc9f;font-family:'Courier New',monospace;font-size:10.5px;color:#888;text-align:right;}
+  @media print{
+    .print-bar{ display:none !important; }
+    .toc{ page-break-after:always; break-after:page; }
+  }
 </style></head>
 <body>
   <div class="print-bar"><button onclick="window.print()">🖨 imprimir / salvar em PDF</button></div>
   <h1>Análises salvas</h1>
   <div class="meta">Documento gerado em ${dataStr} · ${analises.length} análise${analises.length>1?'s':''}${analises.length !== savedAnalyses.length ? ' (filtro aplicado)' : ''}</div>
+
+  <div class="toc">
+    ${tocHtml}
+    <div class="toc-intro">Este documento reúne as análises salvas no Achador, organizadas por curso e disciplina. As respostas foram geradas automaticamente a partir da leitura dos PDFs enviados, por inteligência artificial (ou, quando indicado nos itens, por um modo de aproximação por palavras, sem IA). Elas servem como apoio de estudo — a conferência final de cada resposta é sempre de responsabilidade de quem utiliza este material.</div>
+    <div class="toc-footer">Everton Correa Alves — criador e desenvolvedor</div>
+  </div>
+
   ${sections}
 </body></html>`;
 
